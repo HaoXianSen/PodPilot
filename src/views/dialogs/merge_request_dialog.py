@@ -175,9 +175,42 @@ class MRInfoCollector(QThread):
 
             # 添加主工程信息（如果提供）
             if self.main_project_current_branch:
-                result["__main_project__"] = {
+                # 获取主工程的远程分支列表
+                main_remote_branches = []
+                try:
+                    fetch_result = subprocess.run(
+                        ["git", "fetch", "--prune"],
+                        capture_output=True,
+                        text=True,
+                        cwd=self.project_dir,
+                        timeout=30,
+                        check=False,
+                    )
+
+                    branches_result = subprocess.run(
+                        ["git", "branch", "-r"],
+                        capture_output=True,
+                        text=True,
+                        cwd=self.project_dir,
+                        timeout=10,
+                        check=False,
+                    )
+                    if branches_result.returncode == 0:
+                        branch_lines = branches_result.stdout.strip().split("\n")
+                        for b in branch_lines:
+                            branch_line = b.strip()
+                            if branch_line and "->" in branch_line:
+                                branch_name = branch_line.replace("origin/", "")
+                                main_remote_branches.append(branch_name)
+                        main_remote_branches = list(set(main_remote_branches))
+                        main_remote_branches.sort()
+                except Exception as e:
+                    print(f"DEBUG: Error getting main project remote branches: {e}")
+
+                result[self.main_project_current_branch] = {
                     "name": os.path.basename(self.project_dir),
                     "current_branch": self.main_project_current_branch,
+                    "remote_branches": main_remote_branches,
                     "git_url": self.main_project_git_url,
                     "is_main_project": True,
                 }
@@ -454,10 +487,11 @@ class MergeRequestDialog(QDialog):
     def __init__(self, pods_info, parent=None, config=None, main_project_info=None):
         super().__init__(parent)
 
-        # 将主工程信息添加到pods_info中
+        # 将主工程信息添加到pods_info中，使用实际项目名
         if main_project_info:
             self.pods_info = pods_info.copy()
-            self.pods_info["__main_project__"] = main_project_info
+            project_name = main_project_info.get("name", "未知")
+            self.pods_info[project_name] = main_project_info
         else:
             self.pods_info = pods_info
 
@@ -483,12 +517,13 @@ class MergeRequestDialog(QDialog):
         self.setWindowTitle("批量创建Merge Request")
         self.setMinimumSize(800, 600)
 
-         layout = QVBoxLayout()
+        layout = QVBoxLayout()
 
-         # Token输入区域
-         token_group = QGroupBox("访问令牌配置")
+        # Token输入区域
+        token_group = QGroupBox("访问令牌配置")
         token_layout = QHBoxLayout()
 
+        gitlab_label = QLabel("GitLab Token:")
         self.gitlab_token_input = QLineEdit()
         self.gitlab_token_input.setPlaceholderText("输入GitLab Personal Access Token")
         self.gitlab_token_input.setEchoMode(QLineEdit.Password)
