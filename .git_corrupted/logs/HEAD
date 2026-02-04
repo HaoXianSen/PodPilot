@@ -1,0 +1,79 @@
+0000000000000000000000000000000000000000 3be8603fa90558acd3635f699173e07a77624e77 郝玉鸿 <haoyh02@rd.netease.com> 1767595986 +0800	commit (initial): 初始化 iOS Pod Manager 项目
+3be8603fa90558acd3635f699173e07a77624e77 bfbf12f567bcbd4a06e2b26f436a89abefe75513 郝玉鸿 <haoyh02@rd.netease.com> 1767596013 +0800	commit: 添加项目说明文档
+bfbf12f567bcbd4a06e2b26f436a89abefe75513 4c0c89a74646cb4ad5c2df8c523ae230498aa8d6 郝玉鸿 <haoyh02@rd.netease.com> 1767596176 +0800	commit: 修复Pod列表显示和TagDialog参数错误
+4c0c89a74646cb4ad5c2df8c523ae230498aa8d6 705c9694f1454ef0c875f6b2784a4bdaf2d06475 郝玉鸿 <haoyh02@rd.netease.com> 1767596385 +0800	commit: 修复Pod模式检测正则表达式
+705c9694f1454ef0c875f6b2784a4bdaf2d06475 3bfeb2c64b1fb05318e77533f248e877620b786c 郝玉鸿 <haoyh02@rd.netease.com> 1767596890 +0800	commit: 改进Pod状态显示和配置路径回写
+3bfeb2c64b1fb05318e77533f248e877620b786c 7d9be03938e96e6e9202bdeb08b4f58d45f698f7 郝玉鸿 <haoyh02@rd.netease.com> 1767597191 +0800	commit: 修复PodConfigDialog布局重复问题
+7d9be03938e96e6e9202bdeb08b4f58d45f698f7 b89c77dedfc372bd02da4f37be95b99ff0de8a84 郝玉鸿 <haoyh02@rd.netease.com> 1767597472 +0800	commit: 改进日志输出支持复制功能
+b89c77dedfc372bd02da4f37be95b99ff0de8a84 800d99e03a2b18ca98ff24a40c8196a145d64d3b 郝玉鸿 <haoyh02@rd.netease.com> 1767597612 +0800	commit: 修复Pod名称提取问题
+800d99e03a2b18ca98ff24a40c8196a145d64d3b 6a64195a372c50ed996d4724bf20ac6b73b1f325 郝玉鸿 <haoyh02@rd.netease.com> 1767597744 +0800	commit: 在切换模式后添加pod install执行
+6a64195a372c50ed996d4724bf20ac6b73b1f325 d4647feb78448eb49835ada7d498bad1f00c406a 郝玉鸿 <haoyh02@rd.netease.com> 1767597866 +0800	commit: 修复pod install环境变量设置错误
+d4647feb78448eb49835ada7d498bad1f00c406a 215b231690f48d9260e8e6bf495a42a1f404573a 郝玉鸿 <haoyh02@rd.netease.com> 1767598252 +0800	commit: 改进pod install执行方式
+215b231690f48d9260e8e6bf495a42a1f404573a 556d7045ae4a27ef872c71872c81644fd4d7d653 郝玉鸿 <haoyh02@rd.netease.com> 1767598826 +0800	commit: 修复pod install卡死主线程问题
+556d7045ae4a27ef872c71872c81644fd4d7d653 d6766395963d5deb8a9aefa714343656860bdd11 郝玉鸿 <haoyh02@rd.netease.com> 1767604275 +0800	commit: 实现多选Pod批量操作
+d6766395963d5deb8a9aefa714343656860bdd11 1baf6fbe72a767c58c27c0b574edd4f522bed319 郝玉鸿 <haoyh02@rd.netease.com> 1767604422 +0800	commit: 修复pod install root用户权限问题
+1baf6fbe72a767c58c27c0b574edd4f522bed319 81a4d5afe74302fb7af288c79abb9df7e4d2abc8 郝玉鸿 <haoyh02@rd.netease.com> 1767604548 +0800	commit: 添加RVM环境初始化支持
+81a4d5afe74302fb7af288c79abb9df7e4d2abc8 f40ee4e838ef3065b1c853133becbb5d056f17db 郝玉鸿 <haoyh02@rd.netease.com> 1767604834 +0800	commit: 设置正确的用户环境变量
+f40ee4e838ef3065b1c853133becbb5d056f17db bd63b4351ebae0d2a6dae84240fb832a0a4f2e69 郝玉鸿 <haoyh02@rd.netease.com> 1767605316 +0800	commit: 使用系统默认环境并添加allow-root
+bd63b4351ebae0d2a6dae84240fb832a0a4f2e69 08bfb1c0affb3cfbf1a56098cfc6d147f2d9e079 郝玉鸿 <haoyh02@rd.netease.com> 1767606352 +0800	commit: 添加Pod缓存清理功能
+08bfb1c0affb3cfbf1a56098cfc6d147f2d9e079 2a9a3c635e8fe58d25d65ceeeb7e5cafa4fdc9f7 郝玉鸿 <haoyh02@rd.netease.com> 1767606502 +0800	commit: 将Pod缓存清理改为可选清理
+2a9a3c635e8fe58d25d65ceeeb7e5cafa4fdc9f7 ee6e372359b897ce269cc8a2d8febb977edc3083 郝玉鸿 <haoyh02@rd.netease.com> 1767606736 +0800	commit: 修复清理对话框警告文本显示问题
+ee6e372359b897ce269cc8a2d8febb977edc3083 3d6e6c3ad5aa6091f481586000e7b118e1f5a183 郝玉鸿 <haoyh02@rd.netease.com> 1767667622 +0800	commit: 在TagDialog中添加分支显示和切换功能
+3d6e6c3ad5aa6091f481586000e7b118e1f5a183 babda890b66a372a818ecddcc14480bc9b735eab 郝玉鸿 <haoyh02@rd.netease.com> 1767668289 +0800	commit: 添加批量创建Tag对话框
+babda890b66a372a818ecddcc14480bc9b735eab a5ed2886caad6497a99d90085ee93cd4bbf37e88 郝玉鸿 <haoyh02@rd.netease.com> 1767680301 +0800	commit: 修改为每个Pod单独弹出TagDialog
+a5ed2886caad6497a99d90085ee93cd4bbf37e88 283d08c20b0bcaeae1139530d6cf1c1c718d0db8 郝玉鸿 <haoyh02@rd.netease.com> 1767680634 +0800	commit: 重新实现批量创建Tag对话框
+283d08c20b0bcaeae1139530d6cf1c1c718d0db8 ddc1471d7986388661ca276b540ea9f6bebae77d 郝玉鸿 <haoyh02@rd.netease.com> 1767681994 +0800	commit: 优化BatchTagDialog表格显示
+ddc1471d7986388661ca276b540ea9f6bebae77d cf0d2b0940f7c6b258a44d77bd9fd0936747379d 郝玉鸿 <haoyh02@rd.netease.com> 1767682560 +0800	commit: 简化BatchTagDialog设计
+cf0d2b0940f7c6b258a44d77bd9fd0936747379d 7e05065db0fa367ed9ad61c88d5f2bed3c94162a 郝玉鸿 <haoyh02@rd.netease.com> 1767683610 +0800	commit: 修复BatchTagDialog表格显示问题
+7e05065db0fa367ed9ad61c88d5f2bed3c94162a f01992a0bcf0f8749ac56a5b65c690ed6f858e62 郝玉鸿 <haoyh02@rd.netease.com> 1767690573 +0800	commit: 完善BatchTagDialog：添加每行独立Tag消息编辑和创建按钮
+f01992a0bcf0f8749ac56a5b65c690ed6f858e62 f0078868121b28f462b0a48bbbf223f5cb8780d4 郝玉鸿 <haoyh02@rd.netease.com> 1767690711 +0800	commit: 优化按钮显示：调整行高和按钮尺寸
+f0078868121b28f462b0a48bbbf223f5cb8780d4 f3007210df27a95391e3e7aad0c9ffe044ba7bea 郝玉鸿 <haoyh02@rd.netease.com> 1767690976 +0800	commit: 美化创建按钮：添加绿色主题样式和居中布局
+f3007210df27a95391e3e7aad0c9ffe044ba7bea d07e19f5920c57db18a936947c1cf54f28296482 郝玉鸿 <haoyh02@rd.netease.com> 1767691145 +0800	commit: 修复按钮显示：调整行高和按钮尺寸
+d07e19f5920c57db18a936947c1cf54f28296482 d0b8234937b128fbdbfc8b5ecd028cb17d2c1b73 郝玉鸿 <haoyh02@rd.netease.com> 1767692634 +0800	commit: 优化按钮和选择框布局
+d0b8234937b128fbdbfc8b5ecd028cb17d2c1b73 e86bf3ff0ca21148d2dfb1caeb12cda51238f94b 郝玉鸿 <haoyh02@rd.netease.com> 1767692886 +0800	commit: 美化分支选择下拉框：iOS风格样式
+e86bf3ff0ca21148d2dfb1caeb12cda51238f94b 4dc42aa1857d576c6ec99baadd38b2e3e89e9865 郝玉鸿 <haoyh02@rd.netease.com> 1767692921 +0800	commit: 优化Tag名称显示和提示
+4dc42aa1857d576c6ec99baadd38b2e3e89e9865 e6e8d9abe9acb6c6065e03826216f3951a2ac3bc 郝玉鸿 <haoyh02@rd.netease.com> 1767693174 +0800	commit: 推荐Tag名称使用灰色标识
+e6e8d9abe9acb6c6065e03826216f3951a2ac3bc 10c0519f607215978a7f861ff04131ec81781fae 郝玉鸿 <haoyh02@rd.netease.com> 1767693383 +0800	commit: 添加推荐标识：Tag名称显示(推荐)后缀
+10c0519f607215978a7f861ff04131ec81781fae 041526b1727b0b451ad43182be26f64c29beeb32 郝玉鸿 <haoyh02@rd.netease.com> 1767693709 +0800	commit: 移除单行创建按钮：统一使用批量创建
+041526b1727b0b451ad43182be26f64c29beeb32 862259103a831fd337aa29732752cd87f4421673 郝玉鸿 <haoyh02@rd.netease.com> 1767693898 +0800	commit: 统一使用BatchTagDialog：选中单个或多个Pod都使用批量创建弹窗
+862259103a831fd337aa29732752cd87f4421673 24474ee37d7ccf15b396da4a088498c132dcb137 郝玉鸿 <haoyh02@rd.netease.com> 1767694225 +0800	commit: 只显示远程分支并支持推送tag到远程
+24474ee37d7ccf15b396da4a088498c132dcb137 e9415f9a3cdcad5c58f97d2e411e30b66ab0301e 郝玉鸿 <haoyh02@rd.netease.com> 1767694459 +0800	commit: 添加创建Tag的进度显示
+e9415f9a3cdcad5c58f97d2e411e30b66ab0301e 6dbf4eb11c55348823c16c634699586e98bb8f3a 郝玉鸿 <haoyh02@rd.netease.com> 1767768700 +0800	commit: 简化loading对话框：只显示创建中
+6dbf4eb11c55348823c16c634699586e98bb8f3a 16f96be1d65d0849353605f685f7551c89ce188d 郝玉鸿 <haoyh02@rd.netease.com> 1767769082 +0800	commit: 修复loading对话框不显示问题
+16f96be1d65d0849353605f685f7551c89ce188d 87c4b7836e285884b22480fb81a3f0f3021e9c68 郝玉鸿 <haoyh02@rd.netease.com> 1767769952 +0800	commit: 添加现代化loading动画：三个圆点循环动画
+87c4b7836e285884b22480fb81a3f0f3021e9c68 ece057dbcabe933d9bfd463a72b6cf0b258312c3 郝玉鸿 <haoyh02@rd.netease.com> 1767775552 +0800	commit: 实现多线程Tag创建：避免阻塞主线程
+ece057dbcabe933d9bfd463a72b6cf0b258312c3 c4fda50a64eb06b20426367653d3689febbaaca9 郝玉鸿 <haoyh02@rd.netease.com> 1767775651 +0800	commit: 修复Tag创建失败：清理Tag名称中的(推荐)后缀
+c4fda50a64eb06b20426367653d3689febbaaca9 1ec3c3d977e52dbae8945080886a884fca090d89 郝玉鸿 <haoyh02@rd.netease.com> 1767776062 +0800	commit: 重构Tag模式：批量切换到远程Tag
+1ec3c3d977e52dbae8945080886a884fca090d89 8b46cf09798530ebaeeff48ba3592e454d52f3cf 郝玉鸿 <haoyh02@rd.netease.com> 1767776237 +0800	commit: 修复远程Tag列表：过滤^{}结尾的ref
+8b46cf09798530ebaeeff48ba3592e454d52f3cf 344068ad5e5fbed634594b1a93d00eb095aff693 郝玉鸿 <haoyh02@rd.netease.com> 1767776450 +0800	commit: 修复私有库Podfile修改：智能tag参数替换
+344068ad5e5fbed634594b1a93d00eb095aff693 5e419aa51e265950ce4c3c8827564bf5413e7df3 郝玉鸿 <haoyh02@rd.netease.com> 1767776504 +0800	commit: 支持常量tag引用：智能修改变量定义
+5e419aa51e265950ce4c3c8827564bf5413e7df3 01681f30ee16b3b2b4dc53529dfc2ac0d1c73f95 郝玉鸿 <haoyh02@rd.netease.com> 1767776828 +0800	commit: 提取LoadingWidget组件：可复用的动画Widget
+01681f30ee16b3b2b4dc53529dfc2ac0d1c73f95 7f2481ace71b2fb7812f2cc631137ee042ee2f55 郝玉鸿 <haoyh02@rd.netease.com> 1767776945 +0800	commit: BatchTagDialog使用LoadingWidget：统一动画组件
+7f2481ace71b2fb7812f2cc631137ee042ee2f55 64390375e273a61838ca02f56c9165f280c5e9cf 郝玉鸿 <haoyh02@rd.netease.com> 1767777146 +0800	commit: Tag模式异步加载：先显示弹窗后加载数据
+64390375e273a61838ca02f56c9165f280c5e9cf e4f6f4feab4927dd7f425acd0dcf3f7e753b12bd 郝玉鸿 <haoyh02@rd.netease.com> 1767777358 +0800	commit: 新增一键Tag功能：自动筛选branch引用的pod并批量切换
+e4f6f4feab4927dd7f425acd0dcf3f7e753b12bd 38230ed5917c0ed37bb9c75cae9522dcbf345793 郝玉鸿 <haoyh02@rd.netease.com> 1767777517 +0800	commit: 修复_get_branch_pods方法位置：从RemoteTagLoader移到PodManager类
+38230ed5917c0ed37bb9c75cae9522dcbf345793 8072c57a610efbc0b1dc31dafaf429cb72e1c958 郝玉鸿 <haoyh02@rd.netease.com> 1767777832 +0800	commit: 添加一键Tag调试信息：排查筛选和显示问题
+8072c57a610efbc0b1dc31dafaf429cb72e1c958 25cfa4b2ad5244971d0984a9206ce5bd5d979bcc 郝玉鸿 <haoyh02@rd.netease.com> 1767777944 +0800	commit: 修复一键Tag按钮初始状态：自动选择第一个项目
+25cfa4b2ad5244971d0984a9206ce5bd5d979bcc 57258c2bdede6985531ebfa51a0169e6296385ca 郝玉鸿 <haoyh02@rd.netease.com> 1767778073 +0800	commit: 修复一键Tag配置检查：过滤未配置路径的Pod
+57258c2bdede6985531ebfa51a0169e6296385ca 128ae54f8f9d8ae88331b48dcb06904309c008e3 郝玉鸿 <haoyh02@rd.netease.com> 1767778101 +0800	commit: 清理调试信息：移除print语句
+128ae54f8f9d8ae88331b48dcb06904309c008e3 71d83fe38d066a6261fd69575e4f08cf0a941f89 郝玉鸿 <haoyh02@rd.netease.com> 1767778448 +0800	commit: 扩展一键Tag功能：支持git+tag引用的Pod
+71d83fe38d066a6261fd69575e4f08cf0a941f89 55b4198fd684e83c2d09f7348b5d98d05dfd88af 郝玉鸿 <haoyh02@rd.netease.com> 1767778572 +0800	commit: 修复Pod状态显示：正确识别Git+Tag引用
+55b4198fd684e83c2d09f7348b5d98d05dfd88af 4c5b0f1bb8183c304bb7d2a96c977156ef5ec514 郝玉鸿 <haoyh02@rd.netease.com> 1767778730 +0800	commit: 简化Tag显示：Git+Tag直接显示为Tag
+4c5b0f1bb8183c304bb7d2a96c977156ef5ec514 04e1fcbb39e6e38fae6d2652a2a65dd1de959ad5 郝玉鸿 <haoyh02@rd.netease.com> 1767929132 +0800	commit: 添加一键MR功能：自动筛选branch引用的Pod并批量创建Merge Request
+04e1fcbb39e6e38fae6d2652a2a65dd1de959ad5 04e1fcbb39e6e38fae6d2652a2a65dd1de959ad5 郝玉鸿 <haoyh02@rd.netease.com> 1767929152 +0800	reset: moving to HEAD
+04e1fcbb39e6e38fae6d2652a2a65dd1de959ad5 b2a70a48cab787ed2fb58578b046041c60c1cf7a 郝玉鸿 <haoyh02@rd.netease.com> 1767929439 +0800	commit: 添加个人中心功能：支持头像、Git用户名和Personal Access Token配置
+b2a70a48cab787ed2fb58578b046041c60c1cf7a 18dac1acf3492e7350e9be0b8f5517065ddf49a1 郝玉鸿 <haoyh02@rd.netease.com> 1767929820 +0800	commit: 重构个人中心为右侧抽屉：更现代的UI设计
+18dac1acf3492e7350e9be0b8f5517065ddf49a1 805cd947c3cee5cb22936053ccb5ed6869f5ec9d 郝玉鸿 <haoyh02@rd.netease.com> 1767930007 +0800	commit: 修复个人中心导入错误：删除对PersonalCenterDialog的引用
+805cd947c3cee5cb22936053ccb5ed6869f5ec9d 8e69a168d8d3256a1c8218bc962b067b263f8157 郝玉鸿 <haoyh02@rd.netease.com> 1767930127 +0800	commit: 修复重复的个人中心按钮：删除传统按钮，保留头像+用户名显示
+8e69a168d8d3256a1c8218bc962b067b263f8157 1e52f081e52b5990fe4b71eb2efcb3e284c82dfe 郝玉鸿 <haoyh02@rd.netease.com> 1767931019 +0800	commit: 修复PersonalCenterDrawer的PyQt5兼容性问题
+1e52f081e52b5990fe4b71eb2efcb3e284c82dfe 88f88c2e2a5646207a328bcbe3822023fdd7a960 郝玉鸿 <haoyh02@rd.netease.com> 1767939876 +0800	commit: 优化个人中心UI：头像边框、右上角位置和抽屉大小
+88f88c2e2a5646207a328bcbe3822023fdd7a960 88f88c2e2a5646207a328bcbe3822023fdd7a960 郝玉鸿 <haoyh02@rd.netease.com> 1767953624 +0800	reset: moving to HEAD
+88f88c2e2a5646207a328bcbe3822023fdd7a960 974434cb53e3736f27ca56441c226fbb923174b2 郝玉鸿 <haoyh02@rd.netease.com> 1768385616 +0800	commit: 修复头像按钮裁剪问题并清理调试代码
+974434cb53e3736f27ca56441c226fbb923174b2 afd246522bcacf3dd81dc41b8ec534bb3d2a7ad9 郝玉鸿 <haoyh02@rd.netease.com> 1768892201 +0800	commit: 优化个人中心抽屉UI和头像显示
+afd246522bcacf3dd81dc41b8ec534bb3d2a7ad9 d6f47d573d81dae0b2d93dc59463086e64f02060 郝玉鸿 <haoyh02@rd.netease.com> 1768892760 +0800	commit (amend): 优化个人中心抽屉UI和头像显示
+d6f47d573d81dae0b2d93dc59463086e64f02060 98f1cdda91f4abc90dd9d4544f85ff806ee238fc 郝玉鸿 <haoyh02@rd.netease.com> 1768892797 +0800	commit (amend): 优化个人中心抽屉UI和头像显示
+98f1cdda91f4abc90dd9d4544f85ff806ee238fc c4612cd6490e48c2c4d772bcc37ea801874b165a 郝玉鸿 <haoyh02@rd.netease.com> 1768962687 +0800	commit: 修复个人中心关闭按钮显示和Pod开发模式切换问题
+c4612cd6490e48c2c4d772bcc37ea801874b165a 5855c4171397e6010c3198cd9cc12567869652de 郝玉鸿 <haoyh02@rd.netease.com> 1769240432 +0800	commit: MOD: 修改pod install
+5855c4171397e6010c3198cd9cc12567869652de 5855c4171397e6010c3198cd9cc12567869652de 郝玉鸿 <haoyh02@rd.netease.com> 1769595693 +0800	reset: moving to HEAD
+5855c4171397e6010c3198cd9cc12567869652de 2430b35ec487ba4b9f48ad4081667531473c5459 郝玉鸿 <haoyh02@rd.netease.com> 1769595726 +0800	commit: ADD: opencode configuration and skills directory
+2430b35ec487ba4b9f48ad4081667531473c5459 d2cb3ab6db32fca947afcf6f1c4512b5da0f80fd 郝玉鸿 <haoyh02@rd.netease.com> 1770018336 +0800	commit: REF: 模块化重构main_window.py，提升代码可维护性和可扩展性
