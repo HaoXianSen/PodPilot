@@ -453,10 +453,16 @@ class MergeRequestDialog(QDialog):
 
     def __init__(self, pods_info, parent=None, config=None, main_project_info=None):
         super().__init__(parent)
-        self.pods_info = pods_info
+
+        # 将主工程信息添加到pods_info中
+        if main_project_info:
+            self.pods_info = pods_info.copy()
+            self.pods_info["__main_project__"] = main_project_info
+        else:
+            self.pods_info = pods_info
+
         self.parent_manager = parent
         self.config = config or {}
-        self.main_project_info = main_project_info
         self._debug_print_pods_info()
         self.initUI()
         self.load_tokens_from_config()
@@ -477,43 +483,12 @@ class MergeRequestDialog(QDialog):
         self.setWindowTitle("批量创建Merge Request")
         self.setMinimumSize(800, 600)
 
-        layout = QVBoxLayout()
+         layout = QVBoxLayout()
 
-        # 显示主工程信息（如果提供）
-        if self.main_project_info:
-            main_info_group = QGroupBox("主工程信息")
-            main_info_layout = QVBoxLayout()
-
-            main_info_text = (
-                f"<b>工程名称:</b> {self.main_project_info.get('name', '未知')}<br>"
-            )
-            main_info_text += f"<b>当前分支:</b> {self.main_project_info.get('current_branch', '未知')}<br>"
-            git_url = self.main_project_info.get("git_url", "")
-            if git_url:
-                main_info_text += f"<b> Git URL:</b> {git_url}<br>"
-
-            main_info_label = QLabel()
-            main_info_label.setTextFormat(Qt.RichText)
-            main_info_label.setText(main_info_text)
-            main_info_label.setWordWrap(True)
-            main_info_label.setStyleSheet("""
-                QLabel {
-                    padding: 10px;
-                    background-color: #e8f0fe;
-                    border-radius: 6px;
-                    border: 1px solid #d1e5f8;
-                }
-            """)
-            main_info_layout.addWidget(main_info_label)
-            main_info_group.setLayout(main_info_layout)
-            layout.addWidget(main_info_group)
-            layout.addWidget(main_info_group)
-
-        # Token输入区域
-        token_group = QGroupBox("访问令牌配置")
+         # Token输入区域
+         token_group = QGroupBox("访问令牌配置")
         token_layout = QHBoxLayout()
 
-        gitlab_label = QLabel("GitLab Token:")
         self.gitlab_token_input = QLineEdit()
         self.gitlab_token_input.setPlaceholderText("输入GitLab Personal Access Token")
         self.gitlab_token_input.setEchoMode(QLineEdit.Password)
@@ -701,7 +676,7 @@ class MergeRequestDialog(QDialog):
             QMessageBox.warning(self, "警告", "请输入至少一个访问令牌")
             return
 
-        # 收集所有Pod的MR信息
+        # 收集所有Pod和主工程的MR信息
         mr_info = {}
         for row in range(self.table.rowCount()):
             pod_name = self.table.item(row, 0).text()
@@ -713,7 +688,7 @@ class MergeRequestDialog(QDialog):
             description = self.table.item(row, 4).text()
 
             if not target_branch.strip():
-                QMessageBox.warning(self, "警告", f"Pod {pod_name} 的目标分支不能为空")
+                QMessageBox.warning(self, "警告", f"{pod_name} 的目标分支不能为空")
                 return
 
             info = self.pods_info.get(pod_name, {})
@@ -727,27 +702,11 @@ class MergeRequestDialog(QDialog):
                 "github_token": github_token,
             }
 
-        # 如果有主工程信息，添加主工程MR
-        if self.main_project_info:
-            mr_info["__main_project__"] = {
-                "git_url": self.main_project_info.get("git_url", ""),
-                "source_branch": self.main_project_info.get("current_branch", ""),
-                "target_branch": self.main_project_info.get("current_branch", ""),
-                "title": f"MR from {self.main_project_info.get('current_branch', '未知')}",
-                "description": "主工程MR",
-                "gitlab_token": gitlab_token,
-                "github_token": github_token,
-            }
-
         # 确认提交
-        total_count = len(mr_info)
-        pod_count = total_count - 1 if "__main_project__" in mr_info else total_count
         reply = QMessageBox.question(
             self,
             "确认提交",
-            f"将为 {pod_count} 个Pod创建MR"
-            + (f"，主工程1个MR" if "__main_project__" in mr_info else ""),
-            "是否继续？",
+            f"将为 {len(mr_info)} 个项目创建MR，是否继续？",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
