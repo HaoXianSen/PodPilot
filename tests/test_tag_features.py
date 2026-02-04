@@ -6,9 +6,12 @@ Tag功能阶段二自动化测试套件
 import unittest
 import json
 import os
+import sys
 import tempfile
 import shutil
 from datetime import datetime, timedelta
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.models.tag_validator import TagValidator
 from src.models.tag_history_manager import TagHistoryManager
 
