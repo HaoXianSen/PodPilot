@@ -70,7 +70,7 @@ class PersonalCenterDrawer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_manager = parent
-        self.config_path = os.path.expanduser("~/.pod_manager_config.json")
+        self.config_path = os.path.expanduser("~/.podpilot_config.json")
         self.config = self.load_config()
         self.initUI()
         self.setup_animations()

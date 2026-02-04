@@ -62,7 +62,7 @@ class RemoteTagLoader(QThread):
         self.finished.emit(pods_info)
 
 
-class PodManager(QMainWindow):
+class PodPilot(QMainWindow):
     def __init__(self):
         super().__init__()
 
@@ -79,7 +79,7 @@ class PodManager(QMainWindow):
 
     def _load_personal_config(self):
         """加载个人中心配置"""
-        config_path = os.path.expanduser("~/.pod_manager_config.json")
+        config_path = os.path.expanduser("~/.podpilot_config.json")
         try:
             if os.path.exists(config_path):
                 import json
@@ -117,7 +117,7 @@ class PodManager(QMainWindow):
         print("[DEBUG] ========================")
 
     def initUI(self):
-        self.setWindowTitle("🚀 iOS Pod Manager")
+        self.setWindowTitle("🚀 PodPilot")
         self.setGeometry(100, 100, 1200, 750)
 
         # 创建中央widget

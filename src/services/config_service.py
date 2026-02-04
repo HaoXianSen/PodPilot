@@ -8,7 +8,7 @@ class ConfigService:
 
     def __init__(self, config_path: Union[str, None] = None):
         self.config_path = config_path or os.path.join(
-            os.path.expanduser("~"), ".pod_manager_config.json"
+            os.path.expanduser("~"), ".podpilot_config.json"
         )
         self.projects = []
         self.pods_config = {}
