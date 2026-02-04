@@ -1252,18 +1252,21 @@ class PodPilot(QMainWindow):
                 self.loading_dialog.close()
                 self.loading_dialog = None
 
-            # 将主工程信息添加到pods_info中
-            if "__main_project__" in mr_info:
-                main_project_info = mr_info["__main_project__"]
-                del mr_info["__main_project__"]
-
             # 过滤掉有错误的Pod
             valid_pods_info = {}
+            main_project_info = None
+
             for pod_name, info in mr_info.items():
                 if "error" not in info:
                     valid_pods_info[pod_name] = info
                 else:
                     self.log_message(f"{pod_name}: {info['error']}")
+
+            # 提取主工程信息
+            for pod_name, info in mr_info.items():
+                if info.get("is_main_project"):
+                    main_project_info = info
+                    del valid_pods_info[pod_name]
 
             # 将主工程信息单独处理
             main_project_msg = ""
@@ -1287,15 +1290,15 @@ class PodPilot(QMainWindow):
                 "github_token": self.personal_config.get("github_token", ""),
             }
 
-            dialog = MergeRequestDialog(
-                valid_pods_info, self, personal_config, main_project_info
-            )
-
-            if dialog.exec_() == QDialog.Accepted:
-                self.log_message("批量创建MR完成")
-        except Exception as e:
-            self.log_message(f"处理MR信息时发生错误: {str(e)}")
-            QMessageBox.critical(self, "错误", f"处理MR信息时发生错误: {str(e)}")
+            try:
+                dialog = MergeRequestDialog(
+                    valid_pods_info, self, personal_config, main_project_info
+                )
+                if dialog.exec_() == QDialog.Accepted:
+                    self.log_message("批量创建MR完成")
+            except Exception as e:
+                self.log_message(f"处理MR信息时发生错误: {str(e)}")
+                QMessageBox.critical(self, "错误", f"处理MR信息时发生错误: {str(e)}")
             if dialog.exec_() == QDialog.Accepted:
                 self.log_message("批量创建MR完成")
         except Exception as e:
