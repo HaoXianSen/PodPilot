@@ -81,11 +81,20 @@ class MRInfoCollector(QThread):
     finished = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, pod_names, pod_config, project_dir):
+    def __init__(
+        self,
+        pod_names,
+        pod_config,
+        project_dir,
+        main_project_current_branch=None,
+        main_project_git_url=None,
+    ):
         super().__init__()
         self.pod_names = pod_names
         self.pod_config = pod_config
         self.project_dir = project_dir
+        self.main_project_current_branch = main_project_current_branch
+        self.main_project_git_url = main_project_git_url
 
     def _get_pod_branches_from_podfile(self, pod_name):
         """从Podfile中获取Pod引用的分支"""
@@ -163,6 +172,16 @@ class MRInfoCollector(QThread):
     def run(self):
         try:
             result = {}
+
+            # 添加主工程信息（如果提供）
+            if self.main_project_current_branch:
+                result["__main_project__"] = {
+                    "name": os.path.basename(self.project_dir),
+                    "current_branch": self.main_project_current_branch,
+                    "git_url": self.main_project_git_url,
+                    "is_main_project": True,
+                }
+
             for pod_name in self.pod_names:
                 try:
                     local_path = self.pod_config.get(pod_name, "")
@@ -211,7 +230,7 @@ class MRInfoCollector(QThread):
                         branch_lines = branches_result.stdout.strip().split("\n")
                         for b in branch_lines:
                             branch_line = b.strip()
-                            if branch_line and "->" not in branch_line:
+                            if branch_line and "->" in branch_line:
                                 branch_name = branch_line.replace("origin/", "")
                                 remote_branches.append(branch_name)
                         remote_branches = list(set(remote_branches))
@@ -226,11 +245,12 @@ class MRInfoCollector(QThread):
 
                     result[pod_name] = {
                         "current_branch": current_branch,
-                        "podfile_branch": podfile_branch,
                         "remote_branches": remote_branches,
                         "git_url": git_url,
                         "local_path": local_path,
+                        "podfile_branch": podfile_branch,
                     }
+
                 except subprocess.TimeoutExpired:
                     result[pod_name] = {"error": "操作超时"}
                 except Exception as e:
@@ -431,11 +451,12 @@ class MRRequestWorker(QThread):
 class MergeRequestDialog(QDialog):
     """Merge Request对话框"""
 
-    def __init__(self, pods_info, parent=None, config=None):
+    def __init__(self, pods_info, parent=None, config=None, main_project_info=None):
         super().__init__(parent)
         self.pods_info = pods_info
         self.parent_manager = parent
         self.config = config or {}
+        self.main_project_info = main_project_info
         self._debug_print_pods_info()
         self.initUI()
         self.load_tokens_from_config()
@@ -457,6 +478,36 @@ class MergeRequestDialog(QDialog):
         self.setMinimumSize(800, 600)
 
         layout = QVBoxLayout()
+
+        # 显示主工程信息（如果提供）
+        if self.main_project_info:
+            main_info_group = QGroupBox("主工程信息")
+            main_info_layout = QVBoxLayout()
+
+            main_info_text = (
+                f"<b>工程名称:</b> {self.main_project_info.get('name', '未知')}<br>"
+            )
+            main_info_text += f"<b>当前分支:</b> {self.main_project_info.get('current_branch', '未知')}<br>"
+            git_url = self.main_project_info.get("git_url", "")
+            if git_url:
+                main_info_text += f"<b> Git URL:</b> {git_url}<br>"
+
+            main_info_label = QLabel()
+            main_info_label.setTextFormat(Qt.RichText)
+            main_info_label.setText(main_info_text)
+            main_info_label.setWordWrap(True)
+            main_info_label.setStyleSheet("""
+                QLabel {
+                    padding: 10px;
+                    background-color: #e8f0fe;
+                    border-radius: 6px;
+                    border: 1px solid #d1e5f8;
+                }
+            """)
+            main_info_layout.addWidget(main_info_label)
+            main_info_group.setLayout(main_info_layout)
+            layout.addWidget(main_info_group)
+            layout.addWidget(main_info_group)
 
         # Token输入区域
         token_group = QGroupBox("访问令牌配置")
@@ -676,11 +727,27 @@ class MergeRequestDialog(QDialog):
                 "github_token": github_token,
             }
 
+        # 如果有主工程信息，添加主工程MR
+        if self.main_project_info:
+            mr_info["__main_project__"] = {
+                "git_url": self.main_project_info.get("git_url", ""),
+                "source_branch": self.main_project_info.get("current_branch", ""),
+                "target_branch": self.main_project_info.get("current_branch", ""),
+                "title": f"MR from {self.main_project_info.get('current_branch', '未知')}",
+                "description": "主工程MR",
+                "gitlab_token": gitlab_token,
+                "github_token": github_token,
+            }
+
         # 确认提交
+        total_count = len(mr_info)
+        pod_count = total_count - 1 if "__main_project__" in mr_info else total_count
         reply = QMessageBox.question(
             self,
             "确认提交",
-            f"将为 {len(mr_info)} 个Pod创建MR/PR，是否继续？",
+            f"将为 {pod_count} 个Pod创建MR"
+            + (f"，主工程1个MR" if "__main_project__" in mr_info else ""),
+            "是否继续？",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:

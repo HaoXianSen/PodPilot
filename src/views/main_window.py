@@ -1184,9 +1184,46 @@ class PodPilot(QMainWindow):
             local_path = current_config.get(pod_name, "")
             pods_info_dict[pod_name] = local_path
 
+        # 获取主工程的当前分支和远程URL
+        main_project_current_branch = None
+        main_project_git_url = None
+        try:
+            # 获取主工程当前分支
+            import subprocess
+
+            branch_result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                cwd=self.current_project,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if branch_result.returncode == 0:
+                main_project_current_branch = branch_result.stdout.strip()
+
+            # 获取主工程远程URL
+            url_result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                cwd=self.current_project,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if url_result.returncode == 0:
+                main_project_git_url = url_result.stdout.strip()
+
+        except Exception as e:
+            self.log_message(f"获取主工程信息失败: {str(e)}")
+
         # 创建异步加载工作线程并保存为实例变量以防止被垃圾回收
         self.mr_info_loader = MRInfoCollector(
-            configured_pods, current_config, self.current_project
+            configured_pods,
+            current_config,
+            self.current_project,
+            main_project_current_branch=main_project_current_branch,
+            main_project_git_url=main_project_git_url,
         )
         self.mr_info_loader.finished.connect(
             lambda mr_info: self._on_mr_info_loaded(mr_info)
@@ -1215,6 +1252,11 @@ class PodPilot(QMainWindow):
                 self.loading_dialog.close()
                 self.loading_dialog = None
 
+            # 将主工程信息添加到pods_info中
+            if "__main_project__" in mr_info:
+                main_project_info = mr_info["__main_project__"]
+                del mr_info["__main_project__"]
+
             # 过滤掉有错误的Pod
             valid_pods_info = {}
             for pod_name, info in mr_info.items():
@@ -1222,6 +1264,17 @@ class PodPilot(QMainWindow):
                     valid_pods_info[pod_name] = info
                 else:
                     self.log_message(f"{pod_name}: {info['error']}")
+
+            # 将主工程信息单独处理
+            main_project_msg = ""
+            if main_project_info:
+                main_project_msg = f"主工程: {main_project_info['name']}\n"
+                main_project_msg += (
+                    f"当前分支: {main_project_info.get('current_branch', '未知')}\n"
+                )
+                main_project_msg += (
+                    f"Git URL: {main_project_info.get('git_url', '未知')}\n\n"
+                )
 
             if not valid_pods_info:
                 QMessageBox.warning(self, "警告", "没有可用的Pod信息")
@@ -1234,7 +1287,15 @@ class PodPilot(QMainWindow):
                 "github_token": self.personal_config.get("github_token", ""),
             }
 
-            dialog = MergeRequestDialog(valid_pods_info, self, personal_config)
+            dialog = MergeRequestDialog(
+                valid_pods_info, self, personal_config, main_project_info
+            )
+
+            if dialog.exec_() == QDialog.Accepted:
+                self.log_message("批量创建MR完成")
+        except Exception as e:
+            self.log_message(f"处理MR信息时发生错误: {str(e)}")
+            QMessageBox.critical(self, "错误", f"处理MR信息时发生错误: {str(e)}")
             if dialog.exec_() == QDialog.Accepted:
                 self.log_message("批量创建MR完成")
         except Exception as e:
