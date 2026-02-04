@@ -1252,34 +1252,19 @@ class PodPilot(QMainWindow):
                 self.loading_dialog.close()
                 self.loading_dialog = None
 
-            # 过滤掉有错误的Pod
+            # 过滤掉有错误的Pod，并提取主工程信息
             valid_pods_info = {}
             main_project_info = None
 
             for pod_name, info in mr_info.items():
-                if "error" not in info:
+                if info.get("is_main_project"):
+                    main_project_info = info
+                elif "error" not in info:
                     valid_pods_info[pod_name] = info
                 else:
                     self.log_message(f"{pod_name}: {info['error']}")
 
-            # 提取主工程信息
-            for pod_name, info in mr_info.items():
-                if info.get("is_main_project"):
-                    main_project_info = info
-                    del valid_pods_info[pod_name]
-
-            # 将主工程信息单独处理
-            main_project_msg = ""
-            if main_project_info:
-                main_project_msg = f"主工程: {main_project_info['name']}\n"
-                main_project_msg += (
-                    f"当前分支: {main_project_info.get('current_branch', '未知')}\n"
-                )
-                main_project_msg += (
-                    f"Git URL: {main_project_info.get('git_url', '未知')}\n\n"
-                )
-
-            if not valid_pods_info:
+            if not valid_pods_info and not main_project_info:
                 QMessageBox.warning(self, "警告", "没有可用的Pod信息")
                 return
 
@@ -1290,15 +1275,9 @@ class PodPilot(QMainWindow):
                 "github_token": self.personal_config.get("github_token", ""),
             }
 
-            try:
-                dialog = MergeRequestDialog(
-                    valid_pods_info, self, personal_config, main_project_info
-                )
-                if dialog.exec_() == QDialog.Accepted:
-                    self.log_message("批量创建MR完成")
-            except Exception as e:
-                self.log_message(f"处理MR信息时发生错误: {str(e)}")
-                QMessageBox.critical(self, "错误", f"处理MR信息时发生错误: {str(e)}")
+            dialog = MergeRequestDialog(
+                valid_pods_info, self, personal_config, main_project_info
+            )
             if dialog.exec_() == QDialog.Accepted:
                 self.log_message("批量创建MR完成")
         except Exception as e:

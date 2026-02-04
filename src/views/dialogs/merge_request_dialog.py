@@ -199,9 +199,12 @@ class MRInfoCollector(QThread):
                         branch_lines = branches_result.stdout.strip().split("\n")
                         for b in branch_lines:
                             branch_line = b.strip()
-                            if branch_line and "->" in branch_line:
-                                branch_name = branch_line.replace("origin/", "")
-                                main_remote_branches.append(branch_name)
+                            # 跳过空行和 HEAD 指向行
+                            if not branch_line or "->" in branch_line:
+                                continue
+                            # 移除 origin/ 前缀
+                            branch_name = branch_line.replace("origin/", "")
+                            main_remote_branches.append(branch_name)
                         main_remote_branches = list(set(main_remote_branches))
                         main_remote_branches.sort()
                 except Exception as e:
@@ -263,9 +266,12 @@ class MRInfoCollector(QThread):
                         branch_lines = branches_result.stdout.strip().split("\n")
                         for b in branch_lines:
                             branch_line = b.strip()
-                            if branch_line and "->" in branch_line:
-                                branch_name = branch_line.replace("origin/", "")
-                                remote_branches.append(branch_name)
+                            # 跳过空行和 HEAD 指向行
+                            if not branch_line or "->" in branch_line:
+                                continue
+                            # 移除 origin/ 前缀
+                            branch_name = branch_line.replace("origin/", "")
+                            remote_branches.append(branch_name)
                         remote_branches = list(set(remote_branches))
                         remote_branches.sort()
 
@@ -556,8 +562,16 @@ class MergeRequestDialog(QDialog):
         )
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
 
-        row = 0
+        # 对 pods_info 排序，主工程放第一行
+        sorted_pods = []
         for pod_name, info in self.pods_info.items():
+            if info.get("is_main_project"):
+                sorted_pods.insert(0, (pod_name, info))
+            else:
+                sorted_pods.append((pod_name, info))
+
+        row = 0
+        for pod_name, info in sorted_pods:
             self.table.insertRow(row)
 
             # Pod名称（不可编辑）
@@ -565,76 +579,75 @@ class MergeRequestDialog(QDialog):
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 0, name_item)
 
-            # 源分支（可选择，默认为Podfile中指定的分支）
-            podfile_branch = info.get("podfile_branch", "")
-            remote_branches = info.get("remote_branches", [])
+            # 调试信息
+            print(f"[DEBUG] ===== {pod_name} =====")
+            print(f"[DEBUG] is_main_project: {info.get('is_main_project', False)}")
+            print(f"[DEBUG] current_branch: {info.get('current_branch', 'N/A')}")
+            print(f"[DEBUG] remote_branches: {info.get('remote_branches', [])}")
+
+            # 源分支（ComboBox）
             source_branch_combo = QComboBox()
-            source_branch_combo.addItems(remote_branches)
+            source_branch_combo.setEditable(True)
+            # 只设置下拉列表宽度，不改变选择框本身
+            source_branch_combo.view().setMinimumWidth(250)
+            current_branch = info.get("current_branch", "")
+            remote_branches = info.get("remote_branches", [])
 
-            print(f"DEBUG: Setting source branch for {pod_name}")
-            print(f"  podfile_branch = '{podfile_branch}'")
-            print(f"  remote_branches = {remote_branches}")
-            print(
-                f"  podfile_branch in remote_branches? {podfile_branch in remote_branches}"
-            )
+            # 添加当前分支（如果存在）
+            if current_branch:
+                source_branch_combo.addItem(current_branch)
 
-            # 先尝试精确匹配
-            if podfile_branch and podfile_branch in remote_branches:
-                source_branch_combo.setCurrentText(podfile_branch)
-                source_branch = podfile_branch
-                print(f"  -> Exact match, selected: {podfile_branch}")
-            # 如果精确匹配失败，尝试忽略大小写匹配
-            elif podfile_branch:
-                print(f"  -> No exact match, trying case-insensitive...")
-                matched = False
-                for rb in remote_branches:
-                    print(
-                        f"     Comparing '{rb}' with '{podfile_branch}': {rb.lower() == podfile_branch.lower()}"
-                    )
-                    if rb.lower() == podfile_branch.lower():
-                        source_branch_combo.setCurrentText(rb)
-                        source_branch = rb
-                        matched = True
-                        print(f"  -> Case-insensitive match, selected: {rb}")
-                        break
-                # 如果还是没匹配到，使用第一个
-                if not matched:
-                    print(f"  -> No match found, using first branch")
-                    if remote_branches:
-                        source_branch_combo.setCurrentIndex(0)
-                        source_branch = remote_branches[0]
-                    else:
-                        source_branch = "未指定"
-            elif remote_branches:
-                source_branch_combo.setCurrentIndex(0)
-                source_branch = remote_branches[0]
-                print(f"  -> No podfile_branch, using first: {source_branch}")
-            else:
-                source_branch = "未指定"
-                print(f"  -> No branches available")
+            # 添加远程分支
+            for branch in remote_branches:
+                if branch != current_branch:
+                    source_branch_combo.addItem(branch)
+
+            # 如果有当前分支，默认选中
+            if current_branch:
+                source_branch_combo.setCurrentText(current_branch)
+
             self.table.setCellWidget(row, 1, source_branch_combo)
 
-            # 目标分支（可选择，仅远程分支，默认为master）
-            remote_branches = info.get("remote_branches", [])
+            # 目标分支（ComboBox）
             target_branch_combo = QComboBox()
-            target_branch_combo.addItems(remote_branches)
+            target_branch_combo.setEditable(True)
+            # 只设置下拉列表宽度，不改变选择框本身
+            target_branch_combo.view().setMinimumWidth(250)
+
+            # 添加远程分支
+            for branch in remote_branches:
+                target_branch_combo.addItem(branch)
+
+            # 目标分支优先选择 master/main，其次是 podfile_branch
             if "master" in remote_branches:
                 target_branch_combo.setCurrentText("master")
-            elif remote_branches:
-                target_branch_combo.setCurrentIndex(0)
+            elif "main" in remote_branches:
+                target_branch_combo.setCurrentText("main")
+            else:
+                podfile_branch = info.get("podfile_branch", "")
+                if podfile_branch and podfile_branch in remote_branches:
+                    target_branch_combo.setCurrentText(podfile_branch)
+                elif remote_branches:
+                    target_branch_combo.setCurrentIndex(0)
+
             self.table.setCellWidget(row, 2, target_branch_combo)
 
-            # MR标题（可编辑）
-            title_text = (
-                f"[{pod_name}] {podfile_branch if podfile_branch else '未指定'}"
+            # MR标题
+            default_title = (
+                f"Merge {current_branch}" if current_branch else "Merge Request"
             )
-            title_item = QTableWidgetItem(title_text)
+            title_item = QTableWidgetItem(default_title)
             self.table.setItem(row, 3, title_item)
 
-            # MR描述（可编辑）
-            desc_text = f"Merge branch {podfile_branch if podfile_branch else '未指定'} into master"
-            desc_item = QTableWidgetItem(desc_text)
-            self.table.setItem(row, 4, desc_item)
+            # MR描述 - 默认内容
+            target_branch_text = target_branch_combo.currentText() or "master"
+            default_description = (
+                f"Merge branch '{current_branch}' into '{target_branch_text}'"
+                if current_branch
+                else "Merge Request"
+            )
+            description_item = QTableWidgetItem(default_description)
+            self.table.setItem(row, 4, description_item)
 
             row += 1
 
@@ -772,12 +785,16 @@ class MergeRequestDialog(QDialog):
         loading_dialog.show()
 
         # 创建异步提交工作线程并保存为实例变量以防止被垃圾回收
-        self.mr_worker = MRRequestWorker(mr_info)
-        self.mr_worker.finished.connect(
-            lambda result: self._on_mr_finished(result, loading_dialog)
-        )
-
-        self.mr_worker.start()
+        try:
+            self.mr_worker = MRRequestWorker(mr_info)
+            self.mr_worker.finished.connect(
+                lambda result: self._on_mr_finished(result, loading_dialog)
+            )
+            self.mr_worker.start()
+        except Exception as e:
+            if loading_dialog:
+                loading_dialog.close()
+            QMessageBox.critical(self, "错误", f"无法创建MR工作线程: {str(e)}")
 
     def _on_mr_finished(self, result, loading_dialog):
         """处理MR提交完成"""
