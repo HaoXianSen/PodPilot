@@ -315,13 +315,24 @@ class MRRequestWorker(QThread):
         results = {}
 
         for pod_name, info in self.mr_info.items():
-            git_url = info["git_url"]
+            git_url = info.get("git_url", "")
             source_branch = info["source_branch"]
             target_branch = info["target_branch"]
             title = info["title"]
             description = info["description"]
             gitlab_token = info.get("gitlab_token", "")
             github_token = info.get("github_token", "")
+
+            print(f"[DEBUG] Processing {pod_name}")
+            print(f"[DEBUG]   git_url: '{git_url}'")
+            print(f"[DEBUG]   source_branch: {source_branch}")
+            print(f"[DEBUG]   target_branch: {target_branch}")
+
+            # 检查 git_url 是否为空
+            if not git_url or not git_url.strip():
+                results[pod_name] = {"error": "Git URL 为空，无法创建 MR"}
+                fail_count += 1
+                continue
 
             try:
                 # 判断是GitLab还是GitHub
@@ -376,31 +387,37 @@ class MRRequestWorker(QThread):
     ):
         """创建GitLab Merge Request"""
         try:
-            # 解析项目路径
-            if ":" in git_url:
-                path_part = git_url.split(":")[1]
-            else:
-                from urllib.parse import urlparse
-
-                parsed = urlparse(git_url)
-                path_part = parsed.path.replace(".git", "")
-
-            path_part = urllib.parse.quote(path_part, safe="")
-
-            # 解析GitLab URL
+            # 解析项目路径和主机
             if git_url.startswith("git@"):
+                # 格式: git@gitlab.example.com:group/project.git
                 parts = git_url.replace("git@", "").split(":")
                 host = parts[0]
-                base_url = f"https://{host}/api/v4"
+                path_part = parts[1] if len(parts) > 1 else ""
+                # 移除 .git 后缀
+                path_part = path_part.replace(".git", "")
             else:
+                # 格式: https://gitlab.example.com/group/project.git
+                # 或: https://username@gitlab.example.com/group/project.git
                 from urllib.parse import urlparse
 
                 parsed = urlparse(git_url)
-                host = parsed.netloc
-                base_url = f"https://{host}/api/v4"
+                host = (
+                    parsed.hostname
+                )  # 使用 hostname 而不是 netloc，这样会自动移除用户名
+                path_part = parsed.path
+                # 移除开头的 / 和 .git 后缀
+                path_part = path_part.lstrip("/").replace(".git", "")
+
+            base_url = f"https://{host}/api/v4"
+
+            # URL 编码项目路径（GitLab API 需要）
+            encoded_path = urllib.parse.quote(path_part, safe="")
 
             # 构建API URL
-            api_url = f"{base_url}/projects/{path_part}/merge_requests"
+            api_url = f"{base_url}/projects/{encoded_path}/merge_requests"
+
+            print(f"[DEBUG] GitLab MR API URL: {api_url}")
+            print(f"[DEBUG] Source: {source_branch}, Target: {target_branch}")
 
             # 构建请求数据
             data = {
@@ -429,6 +446,13 @@ class MRRequestWorker(QThread):
                     "mr_iid": result.get("iid", 0),
                     "success": True,
                 }
+        except urllib.error.HTTPError as e:
+            error_body = ""
+            try:
+                error_body = e.read().decode("utf-8")
+            except:
+                pass
+            return {"error": f"HTTP错误 {e.code}: {e.reason}. {error_body}"}
         except urllib.error.URLError as e:
             return {"error": f"网络错误: {str(e)}"}
         except Exception as e:
