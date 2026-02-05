@@ -35,6 +35,7 @@ from src.views.dialogs.batch_tag_switch_dialog import BatchTagSwitchDialog
 from src.widgets.loading_widget import LoadingWidget
 from src.views.dialogs.merge_request_dialog import MergeRequestDialog, MRInfoCollector
 from src.views.dialogs.personal_center_drawer import PersonalCenterDrawer
+from src.views.dialogs.project_mr_dialog import ProjectMRDialog
 
 from src.services import (
     ConfigService,
@@ -255,6 +256,32 @@ class PodPilot(QMainWindow):
         self.one_click_mr_btn.clicked.connect(self.one_click_mr_mode)
         self.one_click_mr_btn.setEnabled(False)
         left_layout.addWidget(self.one_click_mr_btn)
+
+        # 查看工程MR按钮
+        self.view_project_mr_btn = QPushButton("📋 查看工程MR", left_widget)
+        self.view_project_mr_btn.setToolTip("查看当前工程及其关联Pod的待合并MR")
+        self.view_project_mr_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #5856d6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-top: 4px;
+            }
+            QPushButton:hover {
+                background-color: #4240a8;
+            }
+            QPushButton:disabled {
+                background-color: #e0e0e0;
+                color: #a0a0a0;
+            }
+        """)
+        self.view_project_mr_btn.clicked.connect(self.show_project_mrs)
+        self.view_project_mr_btn.setEnabled(False)
+        left_layout.addWidget(self.view_project_mr_btn)
 
         splitter.addWidget(left_widget)
 
@@ -605,6 +632,7 @@ class PodPilot(QMainWindow):
 
         self.one_click_tag_btn.setEnabled(True)
         self.one_click_mr_btn.setEnabled(True)
+        self.view_project_mr_btn.setEnabled(True)
 
         self.save_config()
 
@@ -1306,6 +1334,101 @@ class PodPilot(QMainWindow):
             QMessageBox.critical(self, "错误", error_msg)
         except Exception as e:
             self.log_message(f"处理错误时发生异常: {str(e)}")
+
+    def show_project_mrs(self):
+        """显示当前工程相关的 MR"""
+        if not self.current_project:
+            QMessageBox.warning(self, "提示", "请先选择一个工程")
+            return
+
+        # 加载个人配置获取 Token
+        self.personal_config = self._load_personal_config()
+        gitlab_token = self.personal_config.get("gitlab_token", "")
+
+        if not gitlab_token:
+            QMessageBox.warning(self, "提示", "请先在个人中心配置 GitLab Token")
+            return
+
+        # 获取主工程信息
+        project_name = os.path.basename(self.current_project)
+        main_project_git_url = None
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                cwd=self.current_project,
+                timeout=10,
+                check=False,
+            )
+            if result.returncode == 0:
+                main_project_git_url = result.stdout.strip()
+        except Exception:
+            pass
+
+        project_info = {
+            "name": project_name,
+            "git_url": main_project_git_url,
+        }
+
+        # 从 Podfile 中获取所有 branch/git 引用的私有库及其 git URL
+        pods_info = self._get_pods_git_urls_from_podfile()
+
+        # 显示对话框
+        dialog = ProjectMRDialog(project_info, pods_info, gitlab_token, self)
+        dialog.exec_()
+
+    def _get_pods_git_urls_from_podfile(self):
+        """从 Podfile 中提取所有 branch 引用的私有库 Pod 的 git URL"""
+        pods_info = {}
+
+        if not self.current_project:
+            return pods_info
+
+        podfile_path = os.path.join(self.current_project, "Podfile")
+        if not os.path.exists(podfile_path):
+            return pods_info
+
+        try:
+            with open(podfile_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # 匹配 pod 声明和 git URL
+            # 格式1: pod 'PodName', :git => 'git@xxx.git', :branch => 'xxx'
+            # 格式2: pod 'PodName', :git => 'https://xxx.git', :branch => 'xxx'
+            pod_pattern = r"pod\s+['\"]([^'\"]+)['\"]"
+            git_pattern = r":git\s*=>\s*['\"]([^'\"]+)['\"]"
+
+            for m in re.finditer(pod_pattern, content):
+                pod_name = m.group(1)
+                start_pos = m.start()
+
+                # 查找该 pod 声明的结束位置
+                next_pod = re.search(pod_pattern, content[m.end() :])
+                if next_pod:
+                    end_pos = m.end() + next_pod.start()
+                else:
+                    end_pos = len(content)
+
+                pod_declaration = content[start_pos:end_pos]
+
+                # 只筛选有 :branch 引用的私有库（需要创建 MR 的）
+                # 排除 :tag 引用的（已发布版本，不需要 MR）
+                if ":branch" in pod_declaration and ":tag" not in pod_declaration:
+                    # 提取 git URL
+                    git_match = re.search(git_pattern, pod_declaration)
+                    if git_match:
+                        git_url = git_match.group(1)
+                        # 只添加 gitlab 的项目（排除 github 等公开仓库）
+                        if "gitlab" in git_url.lower():
+                            pods_info[pod_name] = {
+                                "git_url": git_url,
+                            }
+
+        except Exception as e:
+            self.log_message(f"解析 Podfile 获取 git URL 失败: {str(e)}")
+
+        return pods_info
 
     def get_git_username(self):
         """获取Git用户名"""

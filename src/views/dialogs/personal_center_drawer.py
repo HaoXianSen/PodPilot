@@ -23,6 +23,7 @@ from PyQt5.QtCore import (
     QEasingCurve,
     QEvent,
 )
+from src.views.dialogs.my_mr_dialog import MyMRDialog
 
 
 class AvatarWidget(QWidget):
@@ -355,6 +356,46 @@ class PersonalCenterDrawer(QWidget):
         token_group.setLayout(token_layout)
         layout.addWidget(token_group)
 
+        # 我的 MR 区域
+        mr_group = QGroupBox("Merge Requests")
+        mr_layout = QVBoxLayout()
+        mr_layout.setContentsMargins(15, 15, 15, 15)
+
+        mr_desc = QLabel("查看您在 GitLab 上创建的所有待合并 MR")
+        mr_desc.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #666;
+                border: none;
+            }
+        """)
+        mr_desc.setWordWrap(True)
+        mr_layout.addWidget(mr_desc)
+
+        mr_layout.addSpacing(10)
+
+        self.view_mr_btn = QPushButton("查看我的 MR")
+        self.view_mr_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #007aff;
+                color: white;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+            QPushButton:pressed {
+                background-color: #004494;
+            }
+        """)
+        self.view_mr_btn.clicked.connect(self.show_my_mrs)
+        mr_layout.addWidget(self.view_mr_btn)
+
+        mr_group.setLayout(mr_layout)
+        layout.addWidget(mr_group)
+
         # 底部间距
         layout.addSpacing(20)
 
@@ -475,3 +516,18 @@ class PersonalCenterDrawer(QWidget):
 
         QMessageBox.information(self, "成功", "配置已保存")
         self.slide_out()
+
+    def show_my_mrs(self):
+        """显示我的 MR 对话框"""
+        gitlab_token = self.gitlab_token_input.text().strip()
+
+        if not gitlab_token:
+            QMessageBox.warning(self, "提示", "请先配置 GitLab Token")
+            return
+
+        # 从 token 或配置中获取 GitLab 主机
+        # 默认使用常见的 GitLab 主机
+        gitlab_host = "gitlab.corp.youdao.com"
+
+        dialog = MyMRDialog(gitlab_token, gitlab_host, self.parent_manager)
+        dialog.exec_()

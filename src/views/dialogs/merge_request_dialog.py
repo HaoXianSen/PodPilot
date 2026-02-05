@@ -301,7 +301,7 @@ class MRInfoCollector(QThread):
 
 
 class MRRequestWorker(QThread):
-    """异步发送MR请求"""
+    """异步发送MR请求 - 先创建私有库MR，再创建主工程MR并关联链接"""
 
     finished = pyqtSignal(dict)
 
@@ -314,65 +314,51 @@ class MRRequestWorker(QThread):
         fail_count = 0
         results = {}
 
+        # 分离主工程和私有库
+        main_project_info = None
+        main_project_name = None
+        pod_infos = {}
+
         for pod_name, info in self.mr_info.items():
-            git_url = info.get("git_url", "")
-            source_branch = info["source_branch"]
-            target_branch = info["target_branch"]
-            title = info["title"]
-            description = info["description"]
-            gitlab_token = info.get("gitlab_token", "")
-            github_token = info.get("github_token", "")
+            if info.get("is_main_project"):
+                main_project_info = info
+                main_project_name = pod_name
+            else:
+                pod_infos[pod_name] = info
 
-            print(f"[DEBUG] Processing {pod_name}")
-            print(f"[DEBUG]   git_url: '{git_url}'")
-            print(f"[DEBUG]   source_branch: {source_branch}")
-            print(f"[DEBUG]   target_branch: {target_branch}")
+        # 第一阶段：先创建所有私有库的 MR
+        pod_mr_links = []  # 收集成功创建的 MR 链接
 
-            # 检查 git_url 是否为空
-            if not git_url or not git_url.strip():
-                results[pod_name] = {"error": "Git URL 为空，无法创建 MR"}
+        for pod_name, info in pod_infos.items():
+            result = self._create_single_mr(pod_name, info)
+            results[pod_name] = result
+
+            if "error" in result:
                 fail_count += 1
-                continue
+            else:
+                success_count += 1
+                # 收集成功的 MR 链接
+                mr_url = result.get("mr_url") or result.get("pr_url", "")
+                if mr_url:
+                    pod_mr_links.append({"name": pod_name, "url": mr_url})
 
-            try:
-                # 判断是GitLab还是GitHub
-                if "gitlab" in git_url.lower():
-                    if not gitlab_token:
-                        results[pod_name] = {"error": "需要GitLab访问令牌"}
-                    else:
-                        results[pod_name] = self._create_gitlab_mr(
-                            git_url,
-                            source_branch,
-                            target_branch,
-                            title,
-                            description,
-                            gitlab_token,
-                        )
-                elif "github" in git_url.lower():
-                    if not github_token:
-                        results[pod_name] = {"error": "需要GitHub访问令牌"}
-                    else:
-                        results[pod_name] = self._create_github_pr(
-                            git_url,
-                            source_branch,
-                            target_branch,
-                            title,
-                            description,
-                            github_token,
-                        )
-                else:
-                    results[pod_name] = {"error": "不支持的Git平台"}
+        # 第二阶段：创建主工程 MR（如果有的话）
+        if main_project_info and main_project_name:
+            # 在主工程描述中追加私有库 MR 链接
+            if pod_mr_links:
+                original_desc = main_project_info.get("description", "")
+                enhanced_desc = self._build_enhanced_description(
+                    original_desc, pod_mr_links
+                )
+                main_project_info["description"] = enhanced_desc
 
-                if "error" in results[pod_name]:
-                    fail_count += 1
-                else:
-                    success_count += 1
-            except urllib.error.URLError as e:
+            result = self._create_single_mr(main_project_name, main_project_info)
+            results[main_project_name] = result
+
+            if "error" in result:
                 fail_count += 1
-                results[pod_name] = {"error": f"网络错误: {str(e)}"}
-            except Exception as e:
-                fail_count += 1
-                results[pod_name] = {"error": f"创建失败: {str(e)}"}
+            else:
+                success_count += 1
 
         self.finished.emit(
             {
@@ -381,6 +367,75 @@ class MRRequestWorker(QThread):
                 "results": results,
             }
         )
+
+    def _build_enhanced_description(self, original_desc, pod_mr_links):
+        """构建包含私有库 MR 链接的增强描述"""
+        enhanced_desc = original_desc or ""
+
+        if pod_mr_links:
+            enhanced_desc += "\n\n---\n\n"
+            enhanced_desc += "## 关联的私有库 MR\n\n"
+            enhanced_desc += "| Pod 名称 | MR 链接 |\n"
+            enhanced_desc += "|----------|--------|\n"
+
+            for link_info in pod_mr_links:
+                pod_name = link_info["name"]
+                mr_url = link_info["url"]
+                enhanced_desc += f"| {pod_name} | {mr_url} |\n"
+
+        return enhanced_desc
+
+    def _create_single_mr(self, pod_name, info):
+        """创建单个 MR"""
+        git_url = info.get("git_url", "")
+        source_branch = info.get("source_branch", "")
+        target_branch = info.get("target_branch", "")
+        title = info.get("title", "")
+        description = info.get("description", "")
+        gitlab_token = info.get("gitlab_token", "")
+        github_token = info.get("github_token", "")
+
+        print(f"[DEBUG] Processing {pod_name}")
+        print(f"[DEBUG]   git_url: '{git_url}'")
+        print(f"[DEBUG]   source_branch: {source_branch}")
+        print(f"[DEBUG]   target_branch: {target_branch}")
+
+        # 检查 git_url 是否为空
+        if not git_url or not git_url.strip():
+            return {"error": "Git URL 为空，无法创建 MR"}
+
+        try:
+            # 判断是GitLab还是GitHub
+            if "gitlab" in git_url.lower():
+                if not gitlab_token:
+                    return {"error": "需要GitLab访问令牌"}
+                else:
+                    return self._create_gitlab_mr(
+                        git_url,
+                        source_branch,
+                        target_branch,
+                        title,
+                        description,
+                        gitlab_token,
+                    )
+            elif "github" in git_url.lower():
+                if not github_token:
+                    return {"error": "需要GitHub访问令牌"}
+                else:
+                    return self._create_github_pr(
+                        git_url,
+                        source_branch,
+                        target_branch,
+                        title,
+                        description,
+                        github_token,
+                    )
+            else:
+                return {"error": "不支持的Git平台"}
+        except urllib.error.URLError as e:
+            return {"error": f"网络错误: {str(e)}"}
+        except Exception as e:
+            return {"error": f"创建失败: {str(e)}"}
 
     def _create_gitlab_mr(
         self, git_url, source_branch, target_branch, title, description, token
@@ -772,6 +827,7 @@ class MergeRequestDialog(QDialog):
                 "description": description,
                 "gitlab_token": gitlab_token,
                 "github_token": github_token,
+                "is_main_project": info.get("is_main_project", False),
             }
 
         # 确认提交

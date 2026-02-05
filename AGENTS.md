@@ -119,6 +119,8 @@ iPM/
 │   │       ├── batch_tag_dialog.py
 │   │       ├── batch_tag_switch_dialog.py
 │   │       ├── merge_request_dialog.py
+│   │       ├── my_mr_dialog.py
+│   │       ├── project_mr_dialog.py
 │   │       ├── tag_history_dialog.py
 │   │       ├── info_dialog.py
 │   │       └── personal_center_drawer.py

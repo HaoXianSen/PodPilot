@@ -24,6 +24,16 @@
 - **消息模板**：预定义的 Tag 消息模板
 - **Tag 历史**：查看和浏览 Pod 的 Tag 历史
 
+### Merge Request 管理
+- **一键 MR**：批量创建主工程和私有库的 Merge Request
+  - 自动筛选 branch 引用的 Pod
+  - 先创建私有库 MR，再创建主工程 MR
+  - 主工程 MR 描述中自动关联所有私有库 MR 链接
+- **查看我的 MR**：在个人中心查看用户在 GitLab 上创建的所有待合并 MR
+- **查看工程 MR**：查看当前工程及其关联私有库的待合并 MR
+  - 左侧项目列表，右侧 MR 详情
+  - 点击 MR 可直接在浏览器中打开
+
 ### 现代化 UI
 - macOS 风格的设计
 - 实时操作日志
@@ -85,6 +95,8 @@ iPM/
 │   │       ├── batch_tag_dialog.py
 │   │       ├── batch_tag_switch_dialog.py
 │   │       ├── merge_request_dialog.py
+│   │       ├── my_mr_dialog.py
+│   │       ├── project_mr_dialog.py
 │   │       ├── tag_history_dialog.py
 │   │       ├── info_dialog.py
 │   │       └── personal_center_drawer.py
