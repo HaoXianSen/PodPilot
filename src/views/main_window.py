@@ -32,6 +32,8 @@ from PyQt5.QtGui import QColor, QPainter, QPixmap, QIcon
 from src.views.dialogs.pod_config_dialog import PodConfigDialog
 from src.views.dialogs.batch_tag_dialog import BatchTagDialog
 from src.views.dialogs.batch_tag_switch_dialog import BatchTagSwitchDialog
+from src.views.dialogs.branch_create_dialog import BranchCreateDialog
+from src.views.dialogs.batch_branch_dialog import BatchBranchDialog
 from src.widgets.loading_widget import LoadingWidget
 from src.views.dialogs.merge_request_dialog import MergeRequestDialog, MRInfoCollector
 from src.views.dialogs.personal_center_drawer import PersonalCenterDrawer
@@ -59,8 +61,10 @@ class RemoteTagLoader(QThread):
         self.get_pod_name_func = get_pod_name_func
 
     def run(self):
+        # 将QListWidgetItem转换为pod名称列表
+        pod_names = [self.get_pod_name_func(item) for item in self.current_items]
         pods_info = GitService.get_pods_info(
-            self.current_items, self.current_config, self.get_pod_name_func
+            pod_names, self.current_config, self.get_pod_name_func
         )
         self.finished.emit(pods_info)
 
@@ -229,6 +233,34 @@ class PodPilot(QMainWindow):
         self.one_click_tag_btn.setEnabled(False)
         left_layout.addWidget(self.one_click_tag_btn)
 
+        # 一键Branch按钮
+        self.one_click_branch_btn = QPushButton("🔀 一键Branch", left_widget)
+        self.one_click_branch_btn.setToolTip(
+            "自动筛选tag引用的Pod，批量切换到Branch模式"
+        )
+        self.one_click_branch_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #007aff;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-top: 4px;
+            }
+            QPushButton:hover {
+                background-color: #0051d5;
+            }
+            QPushButton:disabled {
+                background-color: #e0e0e0;
+                color: #a0a0a0;
+            }
+        """)
+        self.one_click_branch_btn.clicked.connect(self.one_click_branch_mode)
+        self.one_click_branch_btn.setEnabled(False)
+        left_layout.addWidget(self.one_click_branch_btn)
+
         # 一键MR按钮
         self.one_click_mr_btn = QPushButton("🔄 一键MR", left_widget)
         self.one_click_mr_btn.setToolTip(
@@ -318,6 +350,9 @@ class PodPilot(QMainWindow):
         self.to_normal_btn = QPushButton("正常模式")
         self.to_normal_btn.setProperty("buttonType", "warning")
         self.to_normal_btn.clicked.connect(self.switch_to_normal_mode)
+        self.to_branch_btn = QPushButton("Branch模式")
+        self.to_branch_btn.setProperty("buttonType", "info")
+        self.to_branch_btn.clicked.connect(self.switch_to_branch_mode)
         self.create_tag_btn = QPushButton("创建Tag")
         self.create_tag_btn.setProperty("buttonType", "info")
         self.create_tag_btn.clicked.connect(self.create_tag_for_pod)
@@ -334,6 +369,7 @@ class PodPilot(QMainWindow):
         pod_btn_layout.addWidget(self.config_pod_btn)
         pod_btn_layout.addWidget(self.to_dev_btn)
         pod_btn_layout.addWidget(self.to_normal_btn)
+        pod_btn_layout.addWidget(self.to_branch_btn)
         pod_btn_layout.addWidget(self.create_tag_btn)
         pod_btn_layout.addWidget(self.to_tag_btn)
         pod_btn_layout.addWidget(self.tag_history_btn)
@@ -692,10 +728,10 @@ class PodPilot(QMainWindow):
                 item.setForeground(QColor("#ff9500"))
             elif priority == 3:
                 if pod in current_project_config:
-                    item.setText(f"🏷️ ✅ {pod} (Tag)")
+                    item.setText(f"🏷️ ✅ {pod} (标签)")
                 else:
-                    item.setText(f"🏷️ {pod} (Tag)")
-                item.setForeground(QColor("#5856d6"))
+                    item.setText(f"🏷️ {pod} (标签)")
+                item.setForeground(QColor("#007aff"))
             elif priority == 4:
                 if pod in current_project_config:
                     item.setText(f"📦 ✅ {pod} (Git)")
@@ -900,6 +936,67 @@ class PodPilot(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             self.log_message("批量创建Tag完成")
 
+    def switch_to_branch_mode(self):
+        """切换到Branch模式"""
+        if not self.current_project:
+            QMessageBox.warning(self, "警告", "请先选择项目")
+            return
+
+        current_items = self.pod_list.selectedItems()
+        if not current_items:
+            QMessageBox.warning(self, "警告", "请先选择要切换的Pod")
+            return
+
+        podfile_path = os.path.join(self.current_project, "Podfile")
+        if not os.path.exists(podfile_path):
+            QMessageBox.warning(self, "错误", "未找到Podfile")
+            return
+
+        current_config = self.get_current_pods_config()
+        pods_info = []
+
+        for item in current_items:
+            pod_name = self.get_pod_name_from_item(item)
+
+            if pod_name not in current_config:
+                self.log_message(f"未配置 {pod_name} 的本地路径，跳过")
+                continue
+
+            local_path = current_config[pod_name]
+            if not os.path.exists(local_path):
+                self.log_message(f"本地路径不存在: {local_path}，跳过 {pod_name}")
+                continue
+
+            branches = GitService.get_branches(local_path)
+            current_branch = GitService.get_current_branch(local_path)
+
+            pods_info.append(
+                {
+                    "name": pod_name,
+                    "path": local_path,
+                    "branches": branches,
+                    "current_branch": current_branch,
+                }
+            )
+
+        if not pods_info:
+            QMessageBox.warning(self, "警告", "没有可切换到Branch模式的Pod")
+            return
+
+        dialog = BatchBranchDialog(pods_info, podfile_path, None, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.log_message("批量切换到Branch模式完成")
+            self.load_pods(self.current_project)
+
+            reply = QMessageBox.question(
+                self,
+                "确认",
+                "已切换到Branch模式，是否执行 pod install?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                self.run_pod_install()
+
     def switch_to_tag_mode(self):
         """切换到Tag模式"""
         if not self.current_project:
@@ -1018,6 +1115,17 @@ class PodPilot(QMainWindow):
         )
         return branch_pods
 
+    def _get_tag_pods(self, project_dir):
+        """获取所有使用:tag引用的Pod"""
+        podfile_path = os.path.join(project_dir, "Podfile")
+        if not os.path.exists(podfile_path):
+            return []
+
+        pods, dev_pods, tag_pods, branch_pods, git_pods = (
+            PodService.load_pods_from_podfile(podfile_path)
+        )
+        return tag_pods
+
     def one_click_tag_mode(self):
         """一键Tag模式：自动筛选所有branch引用的pod并批量切换到Tag"""
         if not self.current_project:
@@ -1106,6 +1214,84 @@ class PodPilot(QMainWindow):
         if reply == QMessageBox.Yes:
             # 直接调用switch_to_tag_mode，传递选中的items
             self._switch_to_tag_mode_with_items(selected_items)
+
+    def one_click_branch_mode(self):
+        """一键Branch模式：自动筛选所有tag引用的pod并批量切换到Branch"""
+        if not self.current_project:
+            QMessageBox.warning(self, "警告", "请先选择项目")
+            return
+
+        # 获取所有tag引用的pod
+        target_pods = self._get_tag_pods(self.current_project)
+        if not target_pods:
+            QMessageBox.information(self, "提示", "当前项目中没有发现使用tag引用的Pod")
+            return
+
+        # 检查每个Pod是否有配置
+        current_config = self.get_current_pods_config()
+        configured_pods = []
+        unconfigured_pods = []
+
+        for pod_name in target_pods:
+            if pod_name in current_config:
+                configured_pods.append(pod_name)
+            else:
+                unconfigured_pods.append(pod_name)
+
+        # 如果有未配置的Pod，必须先配置
+        if unconfigured_pods:
+            msg = f"发现 {len(unconfigured_pods)} 个tag Pod没有配置本地路径:\n\n"
+            msg += "\n".join([f"• {pod}" for pod in unconfigured_pods[:5]])
+            if len(unconfigured_pods) > 5:
+                msg += f"\n... 还有 {len(unconfigured_pods) - 5} 个"
+
+            reply = QMessageBox.question(
+                self,
+                "配置检查",
+                msg + "\n\n是否立即配置这些Pod?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                self.configure_selected_pod()
+            return
+
+        if not configured_pods:
+            return
+
+        # 自动选择已配置的pod
+        self.pod_list.clearSelection()
+        selected_items = []
+
+        for i in range(self.pod_list.count()):
+            item = self.pod_list.item(i)
+            pod_name = self.get_pod_name_from_item(item)
+            if pod_name in configured_pods:
+                item.setSelected(True)
+                selected_items.append(item)
+
+        self.log_message(
+            f"一键Branch: 成功选择 {len(selected_items)} 个已配置的Pod进行Branch切换"
+        )
+
+        if not selected_items:
+            QMessageBox.warning(self, "警告", "未能自动选择tag引用的Pod")
+            return
+
+        # 显示选择结果
+        reply = QMessageBox.question(
+            self,
+            "一键Branch",
+            f"已自动选择 {len(selected_items)} 个tag引用的Pod:\n\n"
+            + "\n".join(
+                [f"• {self.get_pod_name_from_item(item)}" for item in selected_items]
+            )
+            + "\n\n是否立即进入Branch切换模式?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if reply == QMessageBox.Yes:
+            # 直接调用switch_to_branch_mode
+            self.switch_to_branch_mode()
 
     def one_click_mr_mode(self):
         """一键MR模式：自动筛选所有branch引用的pod并批量创建Merge Request"""

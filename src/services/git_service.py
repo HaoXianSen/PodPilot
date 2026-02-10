@@ -70,10 +70,13 @@ class GitService:
             )
             branches = result.stdout.strip().split("\n")
             branches = [b.replace("*", "").strip() for b in branches if b.strip()]
+            # 过滤掉 HEAD 指向和包含 HEAD -> 的分支
             branches = [b for b in branches if not b.startswith("HEAD ->")]
+            branches = [b for b in branches if "HEAD ->" not in b]
 
+            # 只保留远程分支，并保留完整的 origin/xxx 格式
             branches = [
-                b.split("/")[-1] if b.startswith("remotes/origin/") else b
+                b.replace("remotes/", "")
                 for b in branches
                 if b.startswith("remotes/origin/")
             ]
@@ -141,3 +144,56 @@ class GitService:
             )
 
         return pods_info
+
+    @staticmethod
+    def get_remote_url(local_path: str) -> Optional[str]:
+        """获取本地仓库的远程URL"""
+        try:
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                cwd=local_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError:
+            return None
+
+    @staticmethod
+    def create_branch(
+        local_path: str, new_branch: str, base_branch: str = "origin/master"
+    ) -> bool:
+        """创建新分支"""
+        try:
+            subprocess.run(
+                ["git", "fetch", "origin"],
+                cwd=local_path,
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "checkout", "-b", new_branch, base_branch],
+                cwd=local_path,
+                capture_output=True,
+                check=True,
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"创建分支失败: {str(e)}")
+            return False
+
+    @staticmethod
+    def push_branch(local_path: str, branch: str) -> bool:
+        """推送分支到远程"""
+        try:
+            subprocess.run(
+                ["git", "push", "-u", "origin", branch],
+                cwd=local_path,
+                capture_output=True,
+                check=True,
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"推送分支失败: {str(e)}")
+            return False

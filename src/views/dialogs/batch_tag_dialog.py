@@ -71,34 +71,40 @@ class TagCreationWorker(QThread):
 
             try:
                 if selected_branch and selected_branch != "无分支":
-                    # 尝试checkout到选中的分支（可能是远程分支）
-                    try:
-                        subprocess.run(
-                            ["git", "checkout", selected_branch],
-                            capture_output=True,
-                            cwd=local_path,
-                            check=True,
-                        )
-                    except subprocess.CalledProcessError:
-                        # 如果本地没有这个分支，尝试从远程拉取
-                        subprocess.run(
-                            ["git", "fetch", "origin"],
-                            capture_output=True,
-                            cwd=local_path,
-                            check=True,
-                        )
-                        subprocess.run(
-                            ["git", "checkout", selected_branch],
-                            capture_output=True,
-                            cwd=local_path,
-                            check=True,
-                        )
+                    # 先fetch远程仓库，确保远程分支信息最新
+                    subprocess.run(
+                        ["git", "fetch", "origin"],
+                        capture_output=True,
+                        cwd=local_path,
+                        check=True,
+                    )
 
-                subprocess.run(
-                    ["git", "tag", "-a", tag_name, "-m", tag_message],
-                    cwd=local_path,
-                    check=True,
-                )
+                    # 直接基于远程分支创建tag
+                    remote_branch = (
+                        f"origin/{selected_branch}"
+                        if not selected_branch.startswith("origin/")
+                        else selected_branch
+                    )
+                    subprocess.run(
+                        [
+                            "git",
+                            "tag",
+                            "-a",
+                            tag_name,
+                            "-m",
+                            tag_message,
+                            remote_branch,
+                        ],
+                        cwd=local_path,
+                        check=True,
+                    )
+                else:
+                    # 如果没有选择分支，基于当前HEAD创建tag
+                    subprocess.run(
+                        ["git", "tag", "-a", tag_name, "-m", tag_message],
+                        cwd=local_path,
+                        check=True,
+                    )
 
                 # 推送tag到远程
                 subprocess.run(
@@ -561,51 +567,97 @@ class BatchTagDialog(QDialog):
         self.worker.finished.connect(
             lambda result: self._on_tag_creation_finished(result, loading_dialog)
         )
+        # 设置父对象为None，避免对话框关闭时线程被强制销毁
+        self.worker.setParent(None)
+        # 线程完成后自动删除
+        self.worker.finished.connect(self.worker.deleteLater)
 
         # 启动工作线程
         self.worker.start()
 
     def _on_tag_creation_finished(self, result, loading_dialog):
         """处理Tag创建完成"""
-        # 停止动画
-        if hasattr(self, "loading_widget"):
-            self.loading_widget.stop_animation()
+        try:
+            # 停止动画
+            if hasattr(self, "loading_widget") and self.loading_widget:
+                self.loading_widget.stop_animation()
 
-        loading_dialog.close()
+            if loading_dialog:
+                loading_dialog.close()
 
-        success_count = result["success_count"]
-        fail_count = result["fail_count"]
-        error_messages = result["error_messages"]
+            success_count = result["success_count"]
+            fail_count = result["fail_count"]
+            error_messages = result["error_messages"]
 
-        # 刷新UI显示（Tag列表和推荐值）
-        for row in range(self.pod_table.rowCount()):
-            pod_info = self.pods_info[row]
-            local_path = pod_info["path"]
+            # 刷新UI显示（Tag列表和推荐值）
+            for row in range(self.pod_table.rowCount()):
+                pod_info = self.pods_info[row]
+                local_path = pod_info["path"]
 
+                try:
+                    # 刷新Tag列表
+                    new_tags = self.get_sorted_tags(local_path)
+                    tags_text = ", ".join(new_tags[:4]) if new_tags else "无"
+                    self.pod_table.item(row, 3).setText(tags_text)
+
+                    # 更新推荐Tag
+                    new_recommended = self.generate_recommended_tag(new_tags)
+                    self.pod_table.item(row, 4).setText(new_recommended + " (推荐)")
+
+                    # 更新配置
+                    self.pod_configs[row] = {
+                        "tag_name": new_recommended,
+                        "tag_message": f"Release {new_recommended}",
+                    }
+                except Exception:
+                    pass
+
+            # 显示结果
+            result_msg = f"✅ 成功: {success_count}\n❌ 失败: {fail_count}"
+            if error_messages:
+                result_msg += "\n\n错误信息:\n" + "\n".join(error_messages[:5])
+                if len(error_messages) > 5:
+                    result_msg += f"\n... 还有 {len(error_messages) - 5} 个错误"
+
+            if fail_count == 0:
+                QMessageBox.information(self, "成功", result_msg)
+                self.accept()
+            else:
+                QMessageBox.warning(self, "警告", result_msg)
+        except Exception as e:
+            if loading_dialog:
+                loading_dialog.close()
+            QMessageBox.critical(self, "错误", f"处理Tag创建结果时出错: {str(e)}")
+
+    def closeEvent(self, event):
+        """处理对话框关闭事件，确保线程安全退出"""
+        if hasattr(self, "worker") and self.worker:
             try:
-                # 刷新Tag列表
-                new_tags = self.get_sorted_tags(local_path)
-                tags_text = ", ".join(new_tags[:4]) if new_tags else "无"
-                self.pod_table.item(row, 3).setText(tags_text)
+                if self.worker.isRunning():
+                    self.worker.quit()
+                    self.worker.wait(2000)  # 等待最多2秒
+            except RuntimeError:
+                # 线程对象可能已被删除
+                pass
+        event.accept()
 
-                # 更新推荐Tag
-                new_recommended = self.generate_recommended_tag(new_tags)
-                self.pod_table.item(row, 4).setText(new_recommended + " (推荐)")
-
-                # 更新配置
-                self.pod_configs[row] = {
-                    "tag_name": new_recommended,
-                    "tag_message": f"Release {new_recommended}",
-                }
-            except:
-                pass  # 忽略刷新错误
-
-        result_msg = f"创建完成：成功 {success_count} 个，失败 {fail_count} 个"
-        if fail_count > 0:
-            result_msg += "\n\n失败详情:\n" + "\n".join(error_messages[:10])
-
-        if fail_count == 0:
-            QMessageBox.information(self, "成功", result_msg)
-            self.accept()
-        else:
-            QMessageBox.warning(self, "警告", result_msg)
+    def reject(self):
+        """处理取消/关闭操作，确保线程安全退出"""
+        if hasattr(self, "worker") and self.worker:
+            try:
+                if self.worker.isRunning():
+                    reply = QMessageBox.question(
+                        self,
+                        "确认",
+                        "Tag创建正在进行中，确定要取消吗？",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    if reply == QMessageBox.No:
+                        return
+                    self.worker.quit()
+                    self.worker.wait(2000)
+            except RuntimeError:
+                # 线程对象可能已被删除
+                pass
+        super().reject()

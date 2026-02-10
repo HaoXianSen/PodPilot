@@ -218,4 +218,72 @@ class PodService:
                         new_lines[start_idx:end_idx] = [original_line + "\n"]
                 modified = True
 
+        elif mode == "tag" and local_path:
+            if ":tag =>" in full_declaration:
+                new_declaration = re.sub(
+                    r"(:tag\s*=>\s*)['\"][^'\"]*['\"]",
+                    f":tag => '{local_path}'",
+                    full_declaration,
+                )
+            else:
+                if full_declaration.rstrip().endswith(","):
+                    new_declaration = (
+                        full_declaration.rstrip() + f" :tag => '{local_path}'"
+                    )
+                else:
+                    if "," in full_declaration:
+                        parts = full_declaration.rsplit(",", 1)
+                        new_declaration = (
+                            parts[0]
+                            + ","
+                            + parts[1].rstrip()
+                            + f", :tag => '{local_path}'"
+                        )
+                    else:
+                        new_declaration = (
+                            full_declaration.rstrip() + f", :tag => '{local_path}'"
+                        )
+
+            if start_idx is not None and end_idx is not None:
+                new_line = new_declaration + "\n"
+                if start_idx == end_idx:
+                    new_lines[start_idx] = new_line
+                else:
+                    new_lines[start_idx:end_idx] = [new_line]
+            modified = True
+
+        elif mode == "branch" and local_path:
+            if ":branch =>" in full_declaration:
+                new_declaration = re.sub(
+                    r"(:branch\s*=>\s*)['\"][^'\"]*['\"]",
+                    f":branch => '{local_path}'",
+                    full_declaration,
+                )
+            else:
+                if full_declaration.rstrip().endswith(","):
+                    new_declaration = (
+                        full_declaration.rstrip() + f" :branch => '{local_path}'"
+                    )
+                else:
+                    if "," in full_declaration:
+                        parts = full_declaration.rsplit(",", 1)
+                        new_declaration = (
+                            parts[0]
+                            + ","
+                            + parts[1].rstrip()
+                            + f", :branch => '{local_path}'"
+                        )
+                    else:
+                        new_declaration = (
+                            full_declaration.rstrip() + f", :branch => '{local_path}'"
+                        )
+
+            if start_idx is not None and end_idx is not None:
+                new_line = new_declaration + "\n"
+                if start_idx == end_idx:
+                    new_lines[start_idx] = new_line
+                else:
+                    new_lines[start_idx:end_idx] = [new_line]
+            modified = True
+
         return new_lines, modified
