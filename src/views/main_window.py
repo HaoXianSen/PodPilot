@@ -28,6 +28,7 @@ from PyQt5.QtCore import (
     QSize,
 )
 from PyQt5.QtGui import QColor, QPainter, QPixmap, QIcon
+from PyQt5.QtSvg import QSvgRenderer
 
 from src.views.dialogs.pod_config_dialog import PodConfigDialog
 from src.views.dialogs.batch_tag_dialog import BatchTagDialog
@@ -672,6 +673,43 @@ class PodPilot(QMainWindow):
 
         self.save_config()
 
+    def _render_svg_icon(self, icon_path, size=16):
+        """将SVG图标渲染为QIcon
+        Args:
+            icon_path: SVG文件路径
+            size: 图标大小
+        Returns:
+            QIcon对象
+        """
+        try:
+            if not os.path.exists(icon_path):
+                return None
+
+            renderer = QSvgRenderer(icon_path)
+            if not renderer.isValid():
+                return None
+
+            pixmap = QPixmap(size, size)
+            pixmap.fill(Qt.transparent)
+
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+
+            return QIcon(pixmap)
+        except Exception:
+            return None
+
+    def _get_icon_path(self, icon_name):
+        """获取图标文件路径
+        Args:
+            icon_name: 图标名称 (branch, configed, tag_fill等)
+        Returns:
+            图标完整路径
+        """
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_dir, "resources", "icons", f"{icon_name}.svg")
+
     def load_pods(self, project_dir):
         self.pod_list.clear()
 
@@ -716,29 +754,39 @@ class PodPilot(QMainWindow):
 
             if priority == 1:
                 if pod in current_project_config:
-                    item.setText(f"⚡ ✅ {pod} (开发模式)")
+                    icon = self._render_svg_icon(self._get_icon_path("check_box"), 16)
+                    item.setIcon(icon) if icon else None
+                    item.setText(f"✅ {pod} (开发模式)")
                 else:
                     item.setText(f"⚡ {pod} (开发模式)")
                 item.setForeground(QColor("#34c759"))
             elif priority == 2:
                 if pod in current_project_config:
-                    item.setText(f"🌿 ✅ {pod} (分支)")
+                    icon = self._render_svg_icon(self._get_icon_path("branch"), 16)
+                    item.setIcon(icon) if icon else None
+                    item.setText(f"✅ {pod} (分支)")
                 else:
-                    item.setText(f"🌿 {pod} (分支)")
+                    icon = self._render_svg_icon(self._get_icon_path("branch"), 16)
+                    item.setIcon(icon) if icon else None
+                    item.setText(f"{pod} (分支)")
                 item.setForeground(QColor("#ff9500"))
             elif priority == 3:
                 if pod in current_project_config:
-                    item.setText(f"🏷️ ✅ {pod} (标签)")
+                    icon = self._render_svg_icon(self._get_icon_path("tag_fill"), 16)
+                    item.setIcon(icon) if icon else None
+                    item.setText(f"✅ {pod} (标签)")
                 else:
-                    item.setText(f"🏷️ {pod} (标签)")
+                    item.setText(f"{pod} (标签)")
                 item.setForeground(QColor("#007aff"))
             elif priority == 4:
                 if pod in current_project_config:
-                    item.setText(f"📦 ✅ {pod} (Git)")
+                    item.setText(f"✅ {pod} (Git)")
                 else:
                     item.setText(f"📦 {pod} (Git)")
                 item.setForeground(QColor("#8e8e93"))
             elif priority == 5:
+                icon = self._render_svg_icon(self._get_icon_path("configed"), 16)
+                item.setIcon(icon) if icon else None
                 item.setText(f"✅ {pod} (已配置)")
                 item.setForeground(QColor("#007aff"))
             else:
