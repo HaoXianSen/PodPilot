@@ -1,4 +1,4 @@
-# iOS Pod Manager
+# Pod Pilot
 
 一个用于管理 iOS 项目 CocoaPods 依赖的桌面应用程序，基于 PyQt5 构建。
 
@@ -10,12 +10,19 @@
 - **模式切换**：
   - 开发模式 (`:path`) - 使用本地代码进行开发
   - 正常模式 - 恢复为远程依赖
-  - Tag模式 (`:tag`) - 指定特定版本标签
-  - Branch模式 (`:branch`) - 指定特定分支
+  - Tag 模式 (`:tag`) - 指定特定版本标签
+  - Branch 模式 (`:branch`) - 指定特定分支
+- **批量切换分支**：
+  - 一键批量切换多个 Pod 到 Branch 模式
+  - 支持选择远程分支或创建新分支
+  - 智能处理使用常量定义版本的 Podfile
+  - 自动更新常量值并修改为 branch 引用
+  - 创建新分支时可指定基于的远程分支
 - **搜索筛选**：快速查找和过滤 Pod
 
 ### Git Tag 管理
 - **创建 Tag**：为 Pod 仓库创建带注释的 Git Tag
+- **批量创建 Tag**：一键为多个 Pod 创建相同或不同的 Tag
 - **智能验证**：
   - Tag 名称格式验证
   - 检测已存在的 Tag
@@ -23,6 +30,16 @@
 - **版本建议**：根据已有 Tag 智能建议下一个版本号
 - **消息模板**：预定义的 Tag 消息模板
 - **Tag 历史**：查看和浏览 Pod 的 Tag 历史
+
+### Git Branch 管理
+- **批量切换分支**：一次性为多个 Pod 切换到指定分支
+- **创建新分支**：基于远程分支创建新分支并自动推送
+- **远程分支显示**：完整显示 `origin/xxx` 格式的远程分支列表
+- **智能 Podfile 处理**：
+  - 自动识别使用常量定义版本的 Podfile（如 `UI_OC_VERSION = 'v1.0.0'`）
+  - 更新常量值为目标分支名
+  - 将 `:tag => CONSTANT` 自动改为 `:branch => CONSTANT`
+  - 保留原有的 git URL 和其他配置
 
 ### Merge Request 管理
 - **一键 MR**：批量创建主工程和私有库的 Merge Request
@@ -59,9 +76,22 @@ python3 main.py
 ```
 
 ### 构建应用
+
+#### 使用 PyInstaller（推荐用于快速测试）
 ```bash
 pyinstaller pod_manager.spec
 ```
+
+#### 使用 py2app（推荐用于正式发布）
+```bash
+# 开发模式（快速测试）
+python3 setup.py py2app -A
+
+# 生产模式（完整打包）
+python3 setup.py py2app
+```
+
+打包后的应用位于 `dist/Pod Pilot.app`
 
 ## 使用指南
 
@@ -71,7 +101,12 @@ pyinstaller pod_manager.spec
    - 选择本地开发路径
 3. **切换模式**：
    - 选中 Pod 后点击"开发模式"、"正常模式"、"Tag模式"或"Branch模式"
-4. **创建 Tag**：
+4. **批量切换分支**：
+   - 选中多个 Pod 后点击"批量切换到 Branch 模式"
+   - 为每个 Pod 选择目标分支（从远程分支列表选择）
+   - 可选：勾选"创建新分支"并指定基于哪个远程分支创建
+   - 点击"批量切换所有"执行切换
+5. **创建 Tag**：
    - 选中 Pod 后点击"创建Tag"
    - 输入 Tag 名称和消息
    - 点击创建
@@ -94,6 +129,8 @@ iPM/
 │   │       ├── tag_dialog.py
 │   │       ├── batch_tag_dialog.py
 │   │       ├── batch_tag_switch_dialog.py
+│   │       ├── batch_branch_dialog.py        # 批量切换分支对话框
+│   │       ├── branch_create_dialog.py       # 创建分支对话框
 │   │       ├── merge_request_dialog.py
 │   │       ├── my_mr_dialog.py
 │   │       ├── project_mr_dialog.py
@@ -110,8 +147,14 @@ iPM/
 │
 ├── resources/                  # 资源文件
 │   └── icons/                  # 图标文件
+│       ├── app_icon.png         # 应用图标（1024x1024）
+│       ├── app_icon.icns        # macOS 应用图标
+│       ├── app_icon_*.png       # 多尺寸图标（16-512px）
+│       ├── check_box.svg        # 选中状态图标
+│       └── uncheck_box.svg      # 未选中状态图标
 │
 ├── main.py                     # 应用入口
+├── setup.py                    # py2app 打包配置
 ├── mac_env_setup.py            # macOS 环境设置
 ├── pod_manager.spec            # PyInstaller 构建配置
 ├── AGENTS.md                   # 开发代理指南
@@ -169,6 +212,33 @@ from tag_dialog import TagDialog
 - 项目列表
 - Pod 本地路径配置
 - 原始 Pod 引用信息
+
+## 特色功能说明
+
+### 批量切换分支模式
+
+批量切换分支功能支持智能处理使用常量定义版本的 Podfile：
+
+**示例场景：**
+
+原 Podfile：
+```ruby
+UI_OC_VERSION = 'v1.0.0'
+pod 'JPKUI-iOS/All', :git => 'git@gitlab.com:xxx.git', :tag => UI_OC_VERSION
+```
+
+切换到分支 `feature/new-ui` 后：
+```ruby
+UI_OC_VERSION = 'feature/new-ui'
+pod 'JPKUI-iOS/All', :git => 'git@gitlab.com:xxx.git', :branch => UI_OC_VERSION
+```
+
+**功能特点：**
+- 自动识别常量引用（支持包含小写字母的常量名，如 `GZUIKit_VERSION`）
+- 同时更新常量值和引用类型（`:tag` → `:branch`）
+- 保留原有的 git URL 和其他配置
+- 远程分支显示 `origin/xxx` 格式，写入 Podfile 时自动去掉 `origin/` 前缀
+- 支持创建新分支并自动推送到远程
 
 ## 注意事项
 
