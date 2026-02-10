@@ -557,6 +557,7 @@ class BatchBranchDialog(QDialog):
             # 目标分支下拉框（可编辑）- 使用容器包装以控制大小
             branch_combo = QComboBox()
             branch_combo.setEditable(True)
+            branch_combo.setInsertPolicy(QComboBox.InsertAlphabetically)
             branch_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             branch_combo.addItems(branches)
             branch_combo.view().setMinimumWidth(250)
@@ -576,6 +577,8 @@ class BatchBranchDialog(QDialog):
             branch_layout.addWidget(branch_combo)
             branch_layout.setContentsMargins(4, 0, 4, 0)
             self.pod_table.setCellWidget(row, 4, branch_container)
+            # 初始化：禁用编辑，只可选择
+            branch_combo.lineEdit().setReadOnly(True)
 
             # 创建新分支复选框 - 增大点击区域
             create_new_checkbox = QCheckBox("创建")
@@ -643,7 +646,17 @@ class BatchBranchDialog(QDialog):
             if branch_container and branch_container.layout():
                 branch_combo = branch_container.layout().itemAt(0).widget()
                 if branch_combo:
-                    branch_combo.setEditable(is_checked)
+                    line_edit = branch_combo.lineEdit()
+                    if line_edit:
+                        if is_checked:
+                            # 选中"创建新分支"时：只可编辑，不可选择下拉列表
+                            branch_combo.clear()
+                            branch_combo.setEditable(True)
+                            line_edit.setReadOnly(False)
+                        else:
+                            # 未选中时：只可选择，不可编辑
+                            branch_combo.setEditable(False)
+                            line_edit.setReadOnly(True)
 
     def on_base_branch_changed(self, row, text):
         """基于分支改变"""
