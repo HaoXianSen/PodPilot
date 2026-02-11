@@ -13,11 +13,8 @@ git commit -m "类型: 描述"
 
 - `feat`: 新功能
 - `fix`: 修复 Bug
-- `docs`: 文档更新
-- `style`: 代码格式调整（不影响功能）
 - `refactor`: 代码重构
 - `test`: 测试相关
-- `chore`: 构建/工具链相关
 - `perf`: 性能优化
 
 ## 提交信息规范
@@ -27,6 +24,7 @@ git commit -m "类型: 描述"
 2. 遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范
 3. 一句话概括本次提交的变更内容
 4. 避免使用过多的描述性词语
+5. 使用中文
 
 ## 常用命令
 
