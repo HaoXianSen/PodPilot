@@ -169,3 +169,36 @@ iPM/
 3. 验证配置保存/加载正确
 4. 测试 pod install 执行
 5. 使用 PyInstaller 构建以验证打包
+
+### Pod 列表图标规范
+
+Pod 列表中每个 Pod 根据其状态显示对应的 SVG 图标，所有图标颜色与该行文字颜色保持一致。
+已配置（configed）为独立状态标记，与类型图标共存，显示在类型图标左侧。
+
+| Priority | 状态 | 类型图标文件 | 文字格式 | 文字颜色 |
+|----------|------|-------------|---------|---------|
+| 1 | 开发模式 | `ic_develop_mode.svg` | `{pod} (开发模式)` | `#34c759` (绿色) |
+| 2 | 分支 | `branch.svg` | `{pod} (分支)` | `#ff9500` (橙色) |
+| 3 | 标签 | `tag_fill.svg` | `{pod} (标签)` | `#007aff` (蓝色) |
+| 4 | Git | `package.svg` | `{pod} (Git)` | `#8e8e93` (灰色) |
+| 5 | 仅已配置 | 无类型图标 | `{pod} (已配置)` | `#007aff` (蓝色) |
+| 6 | 普通 | `package.svg` | `{pod}` | `#8e8e93` (灰色) |
+
+#### 图标规则
+- 已配置图标：`configed.svg`，当 Pod 在 `current_project_config` 中时显示
+- 已配置图标与类型图标共存时，已配置图标在左，类型图标在右
+- 图标颜色：通过替换 SVG 中的 `fill` 属性动态设置，与该行文字颜色一致
+- 不使用 emoji 文字图标（如 ⚡📦），统一使用 SVG 图标
+- 图标大小：单图标 16x16，双图标合并为 34x16
+
+#### 图标文件清单
+```
+resources/icons/
+├── ic_develop_mode.svg    # 开发模式
+├── branch.svg             # 分支模式
+├── tag_fill.svg           # 标签模式
+├── package.svg            # Git / 普通模式
+├── configed.svg           # 已配置标记
+├── check_box.svg          # 复选框（选中）
+└── uncheck_box.svg        # 复选框（未选中）
+```
