@@ -671,6 +671,8 @@ class MergeRequestDialog(QDialog):
             source_branch_combo.view().setMinimumWidth(250)
             current_branch = info.get("current_branch", "")
             remote_branches = info.get("remote_branches", [])
+            podfile_branch = info.get("podfile_branch", "")
+            is_main_project = info.get("is_main_project", False)
 
             # 添加当前分支（如果存在）
             if current_branch:
@@ -681,9 +683,28 @@ class MergeRequestDialog(QDialog):
                 if branch != current_branch:
                     source_branch_combo.addItem(branch)
 
-            # 如果有当前分支，默认选中
-            if current_branch:
-                source_branch_combo.setCurrentText(current_branch)
+            # 设置默认源分支：
+            # - 主工程：使用当前分支
+            # - 依赖库：使用 Podfile 中引用的分支，如果没有则使用 master
+            if is_main_project:
+                # 主工程使用当前分支
+                if current_branch:
+                    source_branch_combo.setCurrentText(current_branch)
+            else:
+                # 依赖库使用 Podfile 中的分支
+                if podfile_branch and podfile_branch in remote_branches:
+                    # 如果 Podfile 分支在远程分支列表中，优先使用
+                    source_branch_combo.setCurrentText(podfile_branch)
+                elif podfile_branch:
+                    # Podfile 分支不在远程列表中，添加并选中
+                    source_branch_combo.insertItem(0, podfile_branch)
+                    source_branch_combo.setCurrentText(podfile_branch)
+                elif "master" in remote_branches:
+                    # 如果没有 Podfile 分支，使用 master
+                    source_branch_combo.setCurrentText("master")
+                elif current_branch:
+                    # 最后回退到当前分支
+                    source_branch_combo.setCurrentText(current_branch)
 
             self.table.setCellWidget(row, 1, source_branch_combo)
 
@@ -914,3 +935,45 @@ class MergeRequestDialog(QDialog):
             )
 
         self.accept()
+
+    def closeEvent(self, event):
+        """处理对话框关闭事件，确保线程安全退出"""
+        if hasattr(self, "mr_worker") and self.mr_worker:
+            try:
+                if self.mr_worker.isRunning():
+                    reply = QMessageBox.question(
+                        self,
+                        "确认",
+                        "MR提交正在进行中，确定要取消吗？",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    if reply == QMessageBox.No:
+                        event.ignore()
+                        return
+                    # 等待线程完成
+                    self.mr_worker.quit()
+                    self.mr_worker.wait(2000)  # 等待最多2秒
+            except RuntimeError:
+                pass
+        event.accept()
+
+    def reject(self):
+        """处理取消/关闭操作，确保线程安全退出"""
+        if hasattr(self, "mr_worker") and self.mr_worker:
+            try:
+                if self.mr_worker.isRunning():
+                    reply = QMessageBox.question(
+                        self,
+                        "确认",
+                        "MR提交正在进行中，确定要取消吗？",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    if reply == QMessageBox.No:
+                        return
+                    self.mr_worker.quit()
+                    self.mr_worker.wait(2000)
+            except RuntimeError:
+                pass
+        super().reject()

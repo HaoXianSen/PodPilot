@@ -599,7 +599,25 @@ class PodPilot(QMainWindow):
         self.setStyleSheet(style_sheet)
 
     def closeEvent(self, event):
-        """当窗口关闭时保存配置"""
+        """当窗口关闭时保存配置并处理线程"""
+        # 等待MR信息收集线程完成
+        if hasattr(self, "mr_info_loader") and self.mr_info_loader:
+            try:
+                if self.mr_info_loader.isRunning():
+                    reply = QMessageBox.question(
+                        self,
+                        "确认",
+                        "MR信息收集正在进行中，确定要关闭吗？",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    if reply == QMessageBox.No:
+                        event.ignore()
+                        return
+                    self.mr_info_loader.quit()
+                    self.mr_info_loader.wait(2000)
+            except RuntimeError:
+                pass
         self.save_config()
         super().closeEvent(event)
 
