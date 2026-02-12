@@ -373,11 +373,16 @@ class BatchTagDialog(QDialog):
             branches = pod_info.get("branches", [])
             if branches:
                 branch_combo.addItems(branches)
-                # 默认选择master或ai-master
-                if "master" in branches:
-                    branch_combo.setCurrentText("master")
-                elif "ai-master" in branches:
-                    branch_combo.setCurrentText("ai-master")
+                # 默认优先选择包含"master"的分支（如 master, origin/master, feature/master-fix 等）
+                master_branches = [b for b in branches if "master" in b.lower()]
+                if master_branches:
+                    # 优先选择精确匹配 "master" 或 "origin/master"，其次是其他包含master的分支
+                    if "master" in master_branches:
+                        branch_combo.setCurrentText("master")
+                    elif "origin/master" in master_branches:
+                        branch_combo.setCurrentText("origin/master")
+                    else:
+                        branch_combo.setCurrentText(master_branches[0])
                 elif len(branches) > 0:
                     branch_combo.setCurrentIndex(0)
             else:

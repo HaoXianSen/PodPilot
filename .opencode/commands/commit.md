@@ -24,7 +24,7 @@ git commit -m "类型: 描述"
 2. 遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范
 3. 一句话概括本次提交的变更内容
 4. 避免使用过多的描述性词语
-5. 使用中文
+5. 使用中文描述
 
 ## 常用命令
 

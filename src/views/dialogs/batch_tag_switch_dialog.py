@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
     QWidget,
     QApplication,
 )
+from PyQt5.QtGui import QBrush, QColor
 from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
 from src.widgets.loading_widget import LoadingWidget
 import subprocess
@@ -58,6 +59,45 @@ class TagSwitchWorker(QThread):
         else:
             # 可能是变量引用
             return "variable", tag_value
+
+    def _parse_branch_reference(self, pod_line):
+        """解析pod行中的branch引用，返回(branch_type, branch_value, references)
+        branch_type: 'literal', 'variable', 或 None
+        branch_value: branch的值或变量名
+        references: 找到的所有branch引用列表，每个元素包含(type, value, match_text)
+        """
+        # 查找所有 :branch => 引用
+        branch_pattern = r":branch\s*=>\s*([^,\s\n]+)"
+        matches = re.finditer(branch_pattern, pod_line)
+
+        references = []
+        for match in matches:
+            branch_value = match.group(1).strip()
+            match_text = match.group(0)
+
+            # 检查是否是字符串字面量
+            if (branch_value.startswith("'") and branch_value.endswith("'")) or (
+                branch_value.startswith('"') and branch_value.endswith('"')
+            ):
+                branch_type = "literal"
+                actual_value = branch_value[1:-1]  # 去掉引号
+            else:
+                branch_type = "variable"
+                actual_value = branch_value
+
+            references.append(
+                {"type": branch_type, "value": actual_value, "match_text": match_text}
+            )
+
+        if references:
+            return references[0]["type"], references[0]["value"], references
+        return None, None, []
+
+    def _convert_branch_to_tag(self, pod_declaration):
+        """将Pod声明中的:branch =>转换为:tag =>"""
+        # 替换所有 :branch => 为 :tag =>
+        new_declaration = re.sub(r":branch\s*=>", ":tag =>", pod_declaration)
+        return new_declaration
 
     def _find_variable_definition(self, var_name):
         """查找变量定义，返回(行号, 当前值)"""
@@ -126,68 +166,126 @@ class TagSwitchWorker(QThread):
                         if full_declaration is None:
                             continue
 
-                        tag_type, tag_value = self._parse_tag_reference(
-                            full_declaration
-                        )
+                        # 检测当前模式
+                        if ":branch =>" in full_declaration:
+                            # Branch 模式，需要转换为 Tag 模式
+                            branch_type, branch_value, branch_refs = (
+                                self._parse_branch_reference(full_declaration)
+                            )
+                            if branch_refs:
+                                # 转换所有 :branch => 为 :tag =>
+                                new_declaration = self._convert_branch_to_tag(
+                                    full_declaration
+                                )
 
-                        if tag_type == "variable":
-                            if tag_value:
-                                var_line_idx, current_value = (
-                                    self._find_variable_definition(tag_value)
-                                )
-                                if var_line_idx is not None:
-                                    escaped_var = re.escape(tag_value)
-                                    new_lines[var_line_idx] = re.sub(
-                                        rf"({escaped_var}\s*=\s*['\"])[^'\"]*(['\"])",
-                                        rf"\1{selected_tag}\2",
-                                        new_lines[var_line_idx],
-                                    )
-                                    modified = True
-                                else:
-                                    error_messages.append(
-                                        f"{pod_name}: 找不到变量 {tag_value} 的定义"
-                                    )
-                        else:
-                            if ":tag =>" in full_declaration:
-                                new_declaration = re.sub(
-                                    r"(:tag\s*=>\s*)['\"][^'\"]*['\"]",
-                                    f":tag => '{selected_tag}'",
-                                    full_declaration,
-                                )
-                            else:
-                                if full_declaration.strip().endswith(","):
-                                    new_declaration = (
-                                        full_declaration.rstrip()
-                                        + f" :tag => '{selected_tag}'\n"
-                                    )
-                                else:
-                                    if "," in full_declaration:
-                                        parts = full_declaration.rsplit(",", 1)
-                                        new_declaration = (
-                                            parts[0]
-                                            + ","
-                                            + parts[1].rstrip()
-                                            + f", :tag => '{selected_tag}'\n"
+                                # 更新变量值
+                                for ref in branch_refs:
+                                    if ref["type"] == "variable":
+                                        var_line_idx, current_value = (
+                                            self._find_variable_definition(ref["value"])
                                         )
+                                        if var_line_idx is not None:
+                                            escaped_var = re.escape(ref["value"])
+                                            new_lines[var_line_idx] = re.sub(
+                                                rf"({escaped_var}\s*=\s*['\"])[^'\"]*(['\"])",
+                                                rf"\1{selected_tag}\2",
+                                                new_lines[var_line_idx],
+                                            )
+                                            modified = True
+                                    elif ref["type"] == "literal":
+                                        # 字面量引用，直接在声明中替换
+                                        new_declaration = re.sub(
+                                            r":tag\s*=>\s*['\"][^'\"]*['\"]",
+                                            f":tag => '{selected_tag}'",
+                                            new_declaration,
+                                        )
+                                        modified = True
+
+                                if start_idx == end_idx:
+                                    # 单行声明，保留原始换行符
+                                    if new_lines[start_idx].endswith("\n"):
+                                        new_lines[start_idx] = new_declaration + "\n"
                                     else:
+                                        new_lines[start_idx] = new_declaration
+                                else:
+                                    new_lines[start_idx:end_idx] = [
+                                        new_declaration + "\n"
+                                    ] + [""] * (end_idx - start_idx - 1)
+                                modified = True
+                            else:
+                                error_messages.append(
+                                    f"{pod_name}: 未找到 :branch => 引用"
+                                )
+                        elif ":tag =>" in full_declaration:
+                            # Tag 模式，直接更新 Tag 值
+                            tag_type, tag_value = self._parse_tag_reference(
+                                full_declaration
+                            )
+
+                            if tag_type == "variable":
+                                if tag_value:
+                                    var_line_idx, current_value = (
+                                        self._find_variable_definition(tag_value)
+                                    )
+                                    if var_line_idx is not None:
+                                        escaped_var = re.escape(tag_value)
+                                        new_lines[var_line_idx] = re.sub(
+                                            rf"({escaped_var}\s*=\s*['\"])[^'\"]*(['\"])",
+                                            rf"\1{selected_tag}\2",
+                                            new_lines[var_line_idx],
+                                        )
+                                        modified = True
+                                    else:
+                                        error_messages.append(
+                                            f"{pod_name}: 找不到变量 {tag_value} 的定义"
+                                        )
+                            else:
+                                if ":tag =>" in full_declaration:
+                                    new_declaration = re.sub(
+                                        r"(:tag\s*=>\s*)['\"][^'\"]*['\"]",
+                                        f":tag => '{selected_tag}'",
+                                        full_declaration,
+                                    )
+                                else:
+                                    if full_declaration.strip().endswith(","):
                                         new_declaration = (
                                             full_declaration.rstrip()
-                                            + f", :tag => '{selected_tag}'\n"
+                                            + f" :tag => '{selected_tag}'\n"
                                         )
+                                    else:
+                                        if "," in full_declaration:
+                                            parts = full_declaration.rsplit(",", 1)
+                                            new_declaration = (
+                                                parts[0]
+                                                + ","
+                                                + parts[1].rstrip()
+                                                + f", :tag => '{selected_tag}'\n"
+                                            )
+                                        else:
+                                            new_declaration = (
+                                                full_declaration.rstrip()
+                                                + f", :tag => '{selected_tag}'\n"
+                                            )
 
-                            if start_idx == end_idx:
-                                new_lines[start_idx] = new_declaration
-                            else:
-                                new_lines[start_idx:end_idx] = [
-                                    new_declaration + "\n"
-                                ] + [""] * (end_idx - start_idx - 1)
-                            modified = True
+                                if start_idx == end_idx:
+                                    # 单行声明，保留原始换行符
+                                    if new_lines[start_idx].endswith("\n"):
+                                        new_lines[start_idx] = new_declaration + "\n"
+                                    else:
+                                        new_lines[start_idx] = new_declaration
+                                else:
+                                    new_lines[start_idx:end_idx] = [
+                                        new_declaration + "\n"
+                                    ] + [""] * (end_idx - start_idx - 1)
+                                modified = True
                         break
 
                 if modified:
                     success_count += 1
                 else:
-                    error_messages.append(f"{pod_name}: 未找到Pod引用")
+                    error_messages.append(
+                        f"{pod_name}: 未找到Pod引用或未检测到Tag/Branch引用"
+                    )
 
             except Exception as e:
                 error_messages.append(f"{pod_name}: {str(e)}")
@@ -335,9 +433,9 @@ class BatchTagSwitchDialog(QDialog):
         table_layout = QVBoxLayout()
 
         self.pod_table = QTableWidget()
-        self.pod_table.setColumnCount(4)
+        self.pod_table.setColumnCount(5)
         self.pod_table.setHorizontalHeaderLabels(
-            ["Pod名称", "当前状态", "远程Tag", "选择Tag"]
+            ["Pod名称", "当前模式", "当前状态", "远程Tag", "选择Tag"]
         )
         self.pod_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.pod_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -346,10 +444,11 @@ class BatchTagSwitchDialog(QDialog):
         self.pod_table.setAlternatingRowColors(True)
 
         # 设置列宽
-        self.pod_table.setColumnWidth(0, 200)  # Pod名称
-        self.pod_table.setColumnWidth(1, 150)  # 当前状态
-        self.pod_table.setColumnWidth(2, 300)  # 远程Tag
-        self.pod_table.setColumnWidth(3, 200)  # 选择Tag
+        self.pod_table.setColumnWidth(0, 180)  # Pod名称
+        self.pod_table.setColumnWidth(1, 100)  # 当前模式
+        self.pod_table.setColumnWidth(2, 120)  # 当前状态
+        self.pod_table.setColumnWidth(3, 250)  # 远程Tag
+        self.pod_table.setColumnWidth(4, 200)  # 选择Tag
 
         table_layout.addWidget(self.pod_table)
         table_group.setLayout(table_layout)
@@ -371,6 +470,26 @@ class BatchTagSwitchDialog(QDialog):
 
         self.setLayout(layout)
 
+    def _detect_pod_mode(self, pod_name):
+        """检测Pod的模式：返回 'branch', 'tag', 或 'unknown'"""
+        if not self.podfile_lines:
+            return "unknown"
+        for i, line in enumerate(self.podfile_lines):
+            if f"pod '{pod_name}'" in line or f'pod "{pod_name}"' in line:
+                # 拼接可能的多行声明
+                full_line = line
+                j = i
+                while full_line.rstrip().endswith("\\") and j + 1 < len(
+                    self.podfile_lines
+                ):
+                    j += 1
+                    full_line += self.podfile_lines[j]
+                if ":branch =>" in full_line:
+                    return "branch"
+                elif ":tag =>" in full_line:
+                    return "tag"
+        return "unknown"
+
     def load_pods_info(self):
         """加载Pod信息到表格"""
         self.pod_table.setRowCount(len(self.pods_info))
@@ -385,10 +504,22 @@ class BatchTagSwitchDialog(QDialog):
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             self.pod_table.setItem(row, 0, name_item)
 
+            # 当前模式
+            mode = self._detect_pod_mode(pod_info["name"])
+            mode_text = "Branch" if mode == "branch" else "Tag"
+            mode_item = QTableWidgetItem(mode_text)
+            mode_item.setFlags(mode_item.flags() & ~Qt.ItemIsEditable)
+            mode_item.setForeground(
+                QBrush(QColor("#007aff"))
+                if mode == "tag"
+                else QBrush(QColor("#ff9500"))
+            )
+            self.pod_table.setItem(row, 1, mode_item)
+
             # 当前状态（暂时显示为"准备切换"）
             status_item = QTableWidgetItem("准备切换")
             status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
-            self.pod_table.setItem(row, 1, status_item)
+            self.pod_table.setItem(row, 2, status_item)
 
             # 远程Tag列表
             remote_tags = pod_info.get("remote_tags", [])
@@ -398,7 +529,7 @@ class BatchTagSwitchDialog(QDialog):
             tags_item = QTableWidgetItem(tags_text)
             tags_item.setFlags(tags_item.flags() & ~Qt.ItemIsEditable)
             tags_item.setToolTip("\n".join(remote_tags) if remote_tags else "无远程Tag")
-            self.pod_table.setItem(row, 2, tags_item)
+            self.pod_table.setItem(row, 3, tags_item)
 
             # 选择Tag（ComboBox）
             tag_combo = QComboBox()
@@ -415,7 +546,7 @@ class BatchTagSwitchDialog(QDialog):
                 )
             else:
                 tag_combo.addItem("无远程Tag")
-            self.pod_table.setCellWidget(row, 3, tag_combo)
+            self.pod_table.setCellWidget(row, 4, tag_combo)
 
         # 设置行高
         for i in range(self.pod_table.rowCount()):
