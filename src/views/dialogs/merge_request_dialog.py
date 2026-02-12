@@ -663,6 +663,7 @@ class MergeRequestDialog(QDialog):
             print(f"[DEBUG] is_main_project: {info.get('is_main_project', False)}")
             print(f"[DEBUG] current_branch: {info.get('current_branch', 'N/A')}")
             print(f"[DEBUG] remote_branches: {info.get('remote_branches', [])}")
+            print(f"[DEBUG] podfile_branch: {info.get('podfile_branch', 'N/A')}")
 
             # 源分支（ComboBox）
             source_branch_combo = QComboBox()
