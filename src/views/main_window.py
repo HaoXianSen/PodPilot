@@ -851,23 +851,23 @@ class PodPilot(QMainWindow):
                 item.setText(f"{pod} (分支)")
                 item.setForeground(QColor("#ff9500"))
             elif priority == 3:
-                icon = self._build_pod_icon("tag_fill", is_configured, 16, 2, "#007aff")
-                if icon:
-                    item.setIcon(icon)
-                item.setText(f"{pod} (标签)")
-                item.setForeground(QColor("#007aff"))
-            elif priority == 4:
-                icon = self._build_pod_icon("package", is_configured, 16, 2, "#8e8e93")
-                if icon:
-                    item.setIcon(icon)
-                item.setText(f"{pod} (Git)")
-                item.setForeground(QColor("#8e8e93"))
-            elif priority == 5:
                 icon = self._build_pod_icon(None, is_configured, 16, 0, "#007aff")
                 if icon:
                     item.setIcon(icon)
                 item.setText(f"{pod} (已配置)")
                 item.setForeground(QColor("#007aff"))
+            elif priority == 4:
+                icon = self._build_pod_icon("tag_fill", is_configured, 16, 2, "#007aff")
+                if icon:
+                    item.setIcon(icon)
+                item.setText(f"{pod} (标签)")
+                item.setForeground(QColor("#007aff"))
+            elif priority == 5:
+                icon = self._build_pod_icon("package", is_configured, 16, 2, "#8e8e93")
+                if icon:
+                    item.setIcon(icon)
+                item.setText(f"{pod} (Git)")
+                item.setForeground(QColor("#8e8e93"))
             else:
                 icon = self._build_pod_icon("package", False, 16, 0, "#8e8e93")
                 if icon:

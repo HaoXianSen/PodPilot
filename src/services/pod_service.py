@@ -158,11 +158,11 @@ class PodService:
             return 1
         elif pod in branch_pods:
             return 2
-        elif pod in tag_pods:
-            return 3
-        elif pod in git_pods:
-            return 4
         elif pod in current_config:
+            return 3
+        elif pod in tag_pods:
+            return 4
+        elif pod in git_pods:
             return 5
         else:
             return 6
