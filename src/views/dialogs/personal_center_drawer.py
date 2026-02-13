@@ -509,6 +509,11 @@ class PersonalCenterDrawer(QWidget):
 
         self.save_config()
 
+        # 同步更新主窗口的 personal_config
+        if self.parent_manager and hasattr(self.parent_manager, "personal_config"):
+            self.parent_manager.personal_config["gitlab_token"] = gitlab_token
+            self.parent_manager.personal_config["github_token"] = github_token
+
         if self.parent_manager:
             self.parent_manager.log_message(
                 f"个人中心配置已保存: GitLab Token={bool(gitlab_token)}, GitHub Token={bool(github_token)}"
