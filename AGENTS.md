@@ -119,6 +119,8 @@ iPM/
 │   │       ├── batch_tag_dialog.py
 │   │       ├── batch_tag_switch_dialog.py
 │   │       ├── merge_request_dialog.py
+│   │       ├── batch_branch_dialog.py
+│   │       ├── branch_create_dialog.py
 │   │       ├── my_mr_dialog.py
 │   │       ├── project_mr_dialog.py
 │   │       ├── tag_history_dialog.py
@@ -202,3 +204,38 @@ resources/icons/
 ├── check_box.svg          # 复选框（选中）
 └── uncheck_box.svg        # 复选框（未选中）
 ```
+
+### Merge Request 功能实现
+
+#### MR 创建流程
+1. 先创建所有私有库的 MR
+2. 检查主工程是否已有对应的 MR（通过源分支和目标分支查询）
+3. 根据情况创建新 MR 或更新已有 MR 的描述
+
+#### 核心方法（merge_request_dialog.py）
+
+| 方法 | 功能 |
+|------|------|
+| `_get_pod_git_url_from_podfile()` | 从 Podfile 解析 Git URL，优先使用 Podfile 中的 URL |
+| `_parse_existing_mr_links()` | 解析已有 MR 描述中的私有库关联表格，去重（同一 Pod 保留最后一个） |
+| `_get_existing_gitlab_mr()` | 查询主工程是否已存在指定源分支到目标分支的 MR |
+| `_update_gitlab_mr_description()` | 更新已有 MR 的描述 |
+| `_build_enhanced_description()` | 构建包含私有库 MR 链接的增强描述 |
+
+#### MR 描述更新逻辑
+
+当主工程已存在 MR 时：
+1. 解析已有 MR 描述中的私有库关联表格
+2. 如果存在多个表格，只保留最后一个，其他的去掉
+3. 解析时对同一 Pod 进行去重（保留最后一个）
+4. 合并本次成功的 MR 链接：
+   - 本次成功的 MR 已在表格中 → 替换旧的链接
+   - 本次成功的 MR 不在表格中 → 追加到表格
+   - 本次失败的 MR → 不处理
+5. 用合并后的完整表格替换所有旧的表格
+
+#### GitLab API 调用
+
+- **查询 MR**: `GET /projects/:id/merge_requests?source_branch=xxx&target_branch=xxx&state=opened`
+- **创建 MR**: `POST /projects/:id/merge_requests`
+- **更新 MR 描述**: `PUT /projects/:id/merge_requests/:iid`（只更新 description 字段）
