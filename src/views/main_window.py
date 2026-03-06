@@ -583,6 +583,47 @@ class PodPilot(QMainWindow):
         else:
             return "normal"
 
+    def update_mode_buttons_state(self):
+        selected_items = self.pod_list.selectedItems()
+
+        if not selected_items:
+            self.mode_btn_group.setExclusive(False)
+            self.to_dev_btn.setChecked(False)
+            self.to_normal_btn.setChecked(False)
+            self.to_branch_btn.setChecked(False)
+            self.to_tag_btn.setChecked(False)
+            self.mode_btn_group.setExclusive(True)
+            return
+
+        modes = set()
+        for item in selected_items:
+            mode = self._get_pod_mode_from_item(item)
+            modes.add(mode)
+
+        self.mode_btn_group.setExclusive(False)
+
+        if len(modes) == 1:
+            mode = modes.pop()
+            if mode == "dev":
+                self.to_dev_btn.setChecked(True)
+            elif mode == "normal":
+                self.to_normal_btn.setChecked(True)
+            elif mode == "branch":
+                self.to_branch_btn.setChecked(True)
+            elif mode == "tag":
+                self.to_tag_btn.setChecked(True)
+            elif mode == "configured":
+                self.to_normal_btn.setChecked(True)
+            elif mode == "git":
+                self.to_normal_btn.setChecked(True)
+        else:
+            self.to_dev_btn.setChecked(False)
+            self.to_normal_btn.setChecked(False)
+            self.to_branch_btn.setChecked(False)
+            self.to_tag_btn.setChecked(False)
+
+        self.mode_btn_group.setExclusive(True)
+
     def get_current_pods_config(self):
         if not self.current_project:
             return {}
