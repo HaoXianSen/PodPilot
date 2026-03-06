@@ -18,6 +18,8 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QDialog,
     QTextEdit,
+    QButtonGroup,
+    QFrame,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -197,103 +199,94 @@ class PodPilot(QMainWindow):
         self.project_list.itemClicked.connect(self.on_project_selected)
         left_layout.addWidget(self.project_list)
 
-        # 项目操作按钮
+        # 项目操作按钮 - 第一行：添加/移除 + 一键操作
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(6)
+
+        # 统一按钮高度
+        left_btn_h = 28
+
         self.add_btn = QPushButton("添加项目")
+        self.add_btn.setFixedHeight(left_btn_h)
         self.add_btn.clicked.connect(self.add_project)
         self.remove_btn = QPushButton("移除项目")
+        self.remove_btn.setFixedHeight(left_btn_h)
         self.remove_btn.clicked.connect(self.remove_project)
         btn_layout.addWidget(self.add_btn)
         btn_layout.addWidget(self.remove_btn)
-        left_layout.addLayout(btn_layout)
 
-        # 一键Tag按钮
-        self.one_click_tag_btn = QPushButton("🔖 一键Tag", left_widget)
-        self.one_click_tag_btn.setToolTip(
-            "自动筛选branch/git引用的Pod，批量切换到Tag引用"
-        )
-        self.one_click_tag_btn.setStyleSheet("""
+        # 分隔符
+        left_separator = QFrame()
+        left_separator.setFrameShape(QFrame.VLine)
+        left_separator.setFrameShadow(QFrame.Sunken)
+        left_separator.setStyleSheet("color: #d1d1d6;")
+        left_separator.setFixedHeight(20)
+        btn_layout.addWidget(left_separator)
+
+        # 一键操作按钮组 - 统一宽度
+        one_click_btn_w = 120
+        one_click_btn_style_green = """
             QPushButton {
                 background-color: #34c759;
                 color: white;
                 border: none;
                 border-radius: 6px;
-                padding: 8px 16px;
                 font-size: 12px;
                 font-weight: 600;
-                margin-top: 4px;
             }
-            QPushButton:hover {
-                background-color: #2db84d;
+            QPushButton:hover { background-color: #2db84d; }
+            QPushButton:disabled { background-color: #e0e0e0; color: #a0a0a0; }
+        """
+        one_click_btn_style_blue = """
+            QPushButton {
+                background-color: #007aff;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 600;
             }
-            QPushButton:disabled {
-                background-color: #e0e0e0;
-                color: #a0a0a0;
-            }
-        """)
+            QPushButton:hover { background-color: #0051d5; }
+            QPushButton:disabled { background-color: #e0e0e0; color: #a0a0a0; }
+        """
+
+        self.one_click_tag_btn = QPushButton("🔖 一键Tag", left_widget)
+        self.one_click_tag_btn.setToolTip(
+            "自动筛选branch/git引用的Pod，批量切换到Tag引用"
+        )
+        self.one_click_tag_btn.setFixedSize(one_click_btn_w, left_btn_h)
+        self.one_click_tag_btn.setStyleSheet(one_click_btn_style_green)
         self.one_click_tag_btn.clicked.connect(self.one_click_tag_mode)
         self.one_click_tag_btn.setEnabled(False)
-        left_layout.addWidget(self.one_click_tag_btn)
+        btn_layout.addWidget(self.one_click_tag_btn)
 
-        # 一键Branch按钮
         self.one_click_branch_btn = QPushButton("🔀 一键Branch", left_widget)
         self.one_click_branch_btn.setToolTip(
             "自动筛选tag引用的Pod，批量切换到Branch模式"
         )
-        self.one_click_branch_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 600;
-                margin-top: 4px;
-            }
-            QPushButton:hover {
-                background-color: #0051d5;
-            }
-            QPushButton:disabled {
-                background-color: #e0e0e0;
-                color: #a0a0a0;
-            }
-        """)
+        self.one_click_branch_btn.setFixedSize(one_click_btn_w, left_btn_h)
+        self.one_click_branch_btn.setStyleSheet(one_click_btn_style_blue)
         self.one_click_branch_btn.clicked.connect(self.one_click_branch_mode)
         self.one_click_branch_btn.setEnabled(False)
-        left_layout.addWidget(self.one_click_branch_btn)
+        btn_layout.addWidget(self.one_click_branch_btn)
 
-        # 一键MR按钮
         self.one_click_mr_btn = QPushButton("🔄 一键MR", left_widget)
         self.one_click_mr_btn.setToolTip(
             "自动筛选branch/git引用的Pod，批量创建Merge Request"
         )
-        self.one_click_mr_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 600;
-                margin-top: 4px;
-            }
-            QPushButton:hover {
-                background-color: #0051d5;
-            }
-            QPushButton:disabled {
-                background-color: #e0e0e0;
-                color: #a0a0a0;
-            }
-        """)
+        self.one_click_mr_btn.setFixedSize(one_click_btn_w, left_btn_h)
+        self.one_click_mr_btn.setStyleSheet(one_click_btn_style_blue)
         self.one_click_mr_btn.clicked.connect(self.one_click_mr_mode)
         self.one_click_mr_btn.setEnabled(False)
-        left_layout.addWidget(self.one_click_mr_btn)
+        btn_layout.addWidget(self.one_click_mr_btn)
 
-        # 查看工程MR按钮
+        btn_layout.addStretch()
+        left_layout.addLayout(btn_layout)
+
+        # 第二行：查看工程MR
         self.view_project_mr_btn = QPushButton("📋 查看工程MR", left_widget)
         self.view_project_mr_btn.setToolTip("查看当前工程及其关联Pod的待合并MR")
+        self.view_project_mr_btn.setFixedHeight(left_btn_h)
         self.view_project_mr_btn.setStyleSheet("""
             QPushButton {
                 background-color: #5856d6;
@@ -303,7 +296,6 @@ class PodPilot(QMainWindow):
                 padding: 8px 16px;
                 font-size: 12px;
                 font-weight: 600;
-                margin-top: 4px;
             }
             QPushButton:hover {
                 background-color: #4240a8;
@@ -342,41 +334,154 @@ class PodPilot(QMainWindow):
         self.pod_list.itemDoubleClicked.connect(self.configure_pod)
         right_layout.addWidget(self.pod_list)
 
-        # Pod操作按钮
+        # Pod操作按钮 - 使用分段控制器布局
+        # 独立功能按钮 + 分隔符 + 模式切换Segmented Control
         pod_btn_layout = QHBoxLayout()
+        pod_btn_layout.setSpacing(6)
+
+        # 独立功能按钮 - 统一固定宽度
+        action_btn_style = """
+            QPushButton {
+                font-size: 12px;
+            }
+        """
         self.config_pod_btn = QPushButton("配置")
         self.config_pod_btn.setProperty("buttonType", "primary")
+        self.config_pod_btn.setFixedSize(80, 28)
+        self.config_pod_btn.setStyleSheet(action_btn_style)
         self.config_pod_btn.clicked.connect(self.configure_selected_pod)
-        self.to_dev_btn = QPushButton("开发模式")
-        self.to_dev_btn.setProperty("buttonType", "success")
-        self.to_dev_btn.clicked.connect(self.switch_to_dev_mode)
-        self.to_normal_btn = QPushButton("正常模式")
-        self.to_normal_btn.setProperty("buttonType", "warning")
-        self.to_normal_btn.clicked.connect(self.switch_to_normal_mode)
-        self.to_branch_btn = QPushButton("Branch模式")
-        self.to_branch_btn.setProperty("buttonType", "info")
-        self.to_branch_btn.clicked.connect(self.switch_to_branch_mode)
+
         self.create_tag_btn = QPushButton("创建Tag")
         self.create_tag_btn.setProperty("buttonType", "info")
+        self.create_tag_btn.setFixedSize(80, 28)
+        self.create_tag_btn.setStyleSheet(action_btn_style)
         self.create_tag_btn.clicked.connect(self.create_tag_for_pod)
-        self.to_tag_btn = QPushButton("Tag模式")
-        self.to_tag_btn.setProperty("buttonType", "info")
-        self.to_tag_btn.clicked.connect(self.switch_to_tag_mode)
+
         self.tag_history_btn = QPushButton("查看历史")
         self.tag_history_btn.setProperty("buttonType", "info")
+        self.tag_history_btn.setFixedSize(80, 28)
+        self.tag_history_btn.setStyleSheet(action_btn_style)
         self.tag_history_btn.clicked.connect(self.show_tag_history)
+
         self.clean_cache_btn = QPushButton("清理缓存")
         self.clean_cache_btn.setProperty("buttonType", "warning")
+        self.clean_cache_btn.setFixedSize(80, 28)
+        self.clean_cache_btn.setStyleSheet(action_btn_style)
         self.clean_cache_btn.clicked.connect(self.clean_pod_cache)
 
         pod_btn_layout.addWidget(self.config_pod_btn)
-        pod_btn_layout.addWidget(self.to_dev_btn)
-        pod_btn_layout.addWidget(self.to_normal_btn)
-        pod_btn_layout.addWidget(self.to_branch_btn)
         pod_btn_layout.addWidget(self.create_tag_btn)
-        pod_btn_layout.addWidget(self.to_tag_btn)
         pod_btn_layout.addWidget(self.tag_history_btn)
         pod_btn_layout.addWidget(self.clean_cache_btn)
+
+        # 分隔符
+        separator1 = QFrame()
+        separator1.setFrameShape(QFrame.VLine)
+        separator1.setFrameShadow(QFrame.Sunken)
+        separator1.setStyleSheet("color: #d1d1d6;")
+        separator1.setFixedHeight(20)
+        pod_btn_layout.addWidget(separator1)
+
+        # 模式切换 - Segmented Control（macOS 风格）
+        self.mode_btn_group = QButtonGroup(self)
+        self.mode_btn_group.setExclusive(True)
+
+        # Segmented Control 容器，间距为0实现连续边框
+        segment_container = QHBoxLayout()
+        segment_container.setSpacing(0)
+
+        segment_first_style = """
+            QPushButton {
+                background-color: #f5f5f7;
+                border: 1px solid #c7c7cc;
+                border-top-left-radius: 6px;
+                border-bottom-left-radius: 6px;
+                border-top-right-radius: 0px;
+                border-bottom-right-radius: 0px;
+                padding: 4px 14px;
+                font-size: 12px;
+                color: #1d1d1f;
+            }
+            QPushButton:hover { background-color: #e8e8ed; }
+            QPushButton:checked {
+                background-color: #007aff;
+                border-color: #007aff;
+                color: white;
+            }
+        """
+        segment_middle_style = """
+            QPushButton {
+                background-color: #f5f5f7;
+                border: 1px solid #c7c7cc;
+                border-left: none;
+                border-radius: 0px;
+                padding: 4px 14px;
+                font-size: 12px;
+                color: #1d1d1f;
+            }
+            QPushButton:hover { background-color: #e8e8ed; }
+            QPushButton:checked {
+                background-color: #007aff;
+                border-color: #007aff;
+                color: white;
+            }
+        """
+        segment_last_style = """
+            QPushButton {
+                background-color: #f5f5f7;
+                border: 1px solid #c7c7cc;
+                border-left: none;
+                border-top-left-radius: 0px;
+                border-bottom-left-radius: 0px;
+                border-top-right-radius: 6px;
+                border-bottom-right-radius: 6px;
+                padding: 4px 14px;
+                font-size: 12px;
+                color: #1d1d1f;
+            }
+            QPushButton:hover { background-color: #e8e8ed; }
+            QPushButton:checked {
+                background-color: #007aff;
+                border-color: #007aff;
+                color: white;
+            }
+        """
+
+        self.to_dev_btn = QPushButton("开发模式")
+        self.to_dev_btn.setCheckable(True)
+        self.to_dev_btn.setFixedHeight(28)
+        self.to_dev_btn.setStyleSheet(segment_first_style)
+        self.to_dev_btn.clicked.connect(self.switch_to_dev_mode)
+        self.mode_btn_group.addButton(self.to_dev_btn)
+
+        self.to_normal_btn = QPushButton("正常模式")
+        self.to_normal_btn.setCheckable(True)
+        self.to_normal_btn.setFixedHeight(28)
+        self.to_normal_btn.setStyleSheet(segment_middle_style)
+        self.to_normal_btn.clicked.connect(self.switch_to_normal_mode)
+        self.mode_btn_group.addButton(self.to_normal_btn)
+
+        self.to_branch_btn = QPushButton("Branch模式")
+        self.to_branch_btn.setCheckable(True)
+        self.to_branch_btn.setFixedHeight(28)
+        self.to_branch_btn.setStyleSheet(segment_middle_style)
+        self.to_branch_btn.clicked.connect(self.switch_to_branch_mode)
+        self.mode_btn_group.addButton(self.to_branch_btn)
+
+        self.to_tag_btn = QPushButton("Tag模式")
+        self.to_tag_btn.setCheckable(True)
+        self.to_tag_btn.setFixedHeight(28)
+        self.to_tag_btn.setStyleSheet(segment_last_style)
+        self.to_tag_btn.clicked.connect(self.switch_to_tag_mode)
+        self.mode_btn_group.addButton(self.to_tag_btn)
+
+        segment_container.addWidget(self.to_dev_btn)
+        segment_container.addWidget(self.to_normal_btn)
+        segment_container.addWidget(self.to_branch_btn)
+        segment_container.addWidget(self.to_tag_btn)
+        pod_btn_layout.addLayout(segment_container)
+
+        pod_btn_layout.addStretch()
         right_layout.addLayout(pod_btn_layout)
 
         # 日志输出区域
@@ -462,6 +567,19 @@ class PodPilot(QMainWindow):
 
     def get_pod_name_from_item(self, item):
         return PodService.get_pod_name_from_text(item.text())
+
+    def _get_pod_mode_from_item(self, item):
+        text = item.text()
+        if "(开发模式)" in text:
+            return "dev"
+        elif "(分支)" in text:
+            return "branch"
+        elif "(标签)" in text:
+            return "tag"
+        elif "(Git)" in text:
+            return "git"
+        else:
+            return "normal"
 
     def get_current_pods_config(self):
         if not self.current_project:
