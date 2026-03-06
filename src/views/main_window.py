@@ -578,6 +578,8 @@ class PodPilot(QMainWindow):
             return "tag"
         elif "(Git)" in text:
             return "git"
+        elif "(已配置)" in text:
+            return "configured"
         else:
             return "normal"
 

@@ -10,8 +10,8 @@ def main():
     app = QApplication(sys.argv)
     # 设置应用图标 - 使用不同尺寸的图标以适应不同场景
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    # 使用 32px 作为窗口图标（macOS 标准标题栏图标尺寸）
-    icon_path = os.path.join(base_dir, "resources", "icons", "app_icon_32.png")
+    # 使用 1024px 作为窗口图标（会被 Qt 缩放到合适尺寸）
+    icon_path = os.path.join(base_dir, "resources", "icons", "app_icon_1024.png")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
     # 设置应用样式为 macOS 风格
