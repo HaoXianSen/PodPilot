@@ -605,6 +605,11 @@ class PodPilot(QMainWindow):
 
         if len(modes) == 1:
             mode = modes.pop()
+            self.to_dev_btn.setChecked(False)
+            self.to_normal_btn.setChecked(False)
+            self.to_branch_btn.setChecked(False)
+            self.to_tag_btn.setChecked(False)
+
             if mode == "dev":
                 self.to_dev_btn.setChecked(True)
             elif mode == "normal":
