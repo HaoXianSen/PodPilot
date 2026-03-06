@@ -1040,6 +1040,7 @@ class PodPilot(QMainWindow):
             self.pod_list.addItem(item)
 
         self.log_message(f"已加载 {len(pods)} 个Pod")
+        self.update_mode_buttons_state()
 
     def filter_pods(self):
         search_text = self.pod_search.text().lower()
