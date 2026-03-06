@@ -332,6 +332,7 @@ class PodPilot(QMainWindow):
         self.pod_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.pod_list.setIconSize(QSize(34, 16))
         self.pod_list.itemDoubleClicked.connect(self.configure_pod)
+        self.pod_list.itemSelectionChanged.connect(self.update_mode_buttons_state)
         right_layout.addWidget(self.pod_list)
 
         # Pod操作按钮 - 使用分段控制器布局
