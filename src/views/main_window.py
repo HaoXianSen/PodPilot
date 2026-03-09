@@ -42,6 +42,7 @@ from src.widgets.loading_widget import LoadingWidget
 from src.views.dialogs.merge_request_dialog import MergeRequestDialog, MRInfoCollector
 from src.views.dialogs.personal_center_drawer import PersonalCenterDrawer
 from src.views.dialogs.project_mr_dialog import ProjectMRDialog
+from src.views.dialogs.tag_history_dialog import TagHistoryDialog
 
 from src.services import (
     ConfigService,
@@ -51,6 +52,7 @@ from src.services import (
     PodCacheService,
 )
 from src.components import AvatarButton
+from src.models.tag_history_manager import TagHistoryManager
 
 
 class RemoteTagLoader(QThread):
