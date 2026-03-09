@@ -82,7 +82,6 @@ class PodPilot(QMainWindow):
         self.config_service = ConfigService()
         self.pod_install_service = PodInstallService(log_callback=self.log_message)
         self.pod_cache_service = PodCacheService(log_callback=self.log_message)
-        self.history_manager = TagHistoryManager(self.config_service.config_path)
 
         self.personal_config = self._load_personal_config()
 
@@ -361,12 +360,6 @@ class PodPilot(QMainWindow):
         self.create_tag_btn.setStyleSheet(action_btn_style)
         self.create_tag_btn.clicked.connect(self.create_tag_for_pod)
 
-        self.tag_history_btn = QPushButton("查看历史")
-        self.tag_history_btn.setProperty("buttonType", "info")
-        self.tag_history_btn.setFixedSize(80, 28)
-        self.tag_history_btn.setStyleSheet(action_btn_style)
-        self.tag_history_btn.clicked.connect(self.show_tag_history)
-
         self.clean_cache_btn = QPushButton("清理缓存")
         self.clean_cache_btn.setProperty("buttonType", "warning")
         self.clean_cache_btn.setFixedSize(80, 28)
@@ -375,7 +368,6 @@ class PodPilot(QMainWindow):
 
         pod_btn_layout.addWidget(self.config_pod_btn)
         pod_btn_layout.addWidget(self.create_tag_btn)
-        pod_btn_layout.addWidget(self.tag_history_btn)
         pod_btn_layout.addWidget(self.clean_cache_btn)
 
         # 分隔符
