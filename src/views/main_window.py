@@ -1126,6 +1126,20 @@ class PodPilot(QMainWindow):
             for item in current_items:
                 pod_name = self.get_pod_name_from_item(item)
 
+                _, _, full_declaration = PodService.get_full_pod_declaration(
+                    lines, pod_name
+                )
+                if full_declaration:
+                    mode_info = PodService.extract_pod_mode_info(full_declaration)
+
+                    if mode_info["mode"] != "dev" and mode_info["mode"] != "normal":
+                        self.config_service.save_last_pod_mode(
+                            self.current_project,
+                            pod_name,
+                            mode_info["mode"],
+                            mode_info["data"],
+                        )
+
                 if pod_name not in current_config:
                     QMessageBox.warning(self, "警告", f"未配置 {pod_name} 的本地路径")
                     continue
