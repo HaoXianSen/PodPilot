@@ -153,19 +153,27 @@ class PodService:
         git_pods: List[str],
         current_config: Dict[str, str],
     ) -> int:
-        """计算Pod的优先级"""
+        """计算Pod的优先级
+
+        优先级说明：
+        1 = 开发模式 (:path)
+        2 = 分支模式 (:branch)
+        3 = 标签模式 (:tag)
+        4 = Git模式 (:git)
+        5 = 普通模式（无特殊引用）
+
+        注意：已配置只是一个标记，不影响优先级
+        """
         if pod in dev_pods:
             return 1
         elif pod in branch_pods:
             return 2
-        elif pod in current_config:
-            return 3
         elif pod in tag_pods:
-            return 4
+            return 3
         elif pod in git_pods:
-            return 5
+            return 4
         else:
-            return 6
+            return 5
 
     @staticmethod
     def switch_pod_mode(
