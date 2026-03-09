@@ -290,11 +290,14 @@ class PersonalCenterDrawer(QWidget):
 
         info_layout.addWidget(self.avatar_widget)
 
-        # 名字
+        # 名字和提示
+        name_container = QHBoxLayout()
+        name_container.setContentsMargins(10, 0, 0, 0)
+        name_container.setSpacing(8)
+
         name_layout = QVBoxLayout()
         username = self.get_git_username()
         self.name_input = QLineEdit(username)
-        self.name_input.setContentsMargins(10, 0, 0, 0)
         self.name_input.setStyleSheet("""
             QLineEdit {
                 font-size: 16px;
@@ -315,20 +318,30 @@ class PersonalCenterDrawer(QWidget):
             }
         """)
         name_layout.addWidget(self.name_input)
-
-        # 名称提示
-        name_hint = QLabel("修改将同步到本地 Git 全局配置")
-        name_hint.setContentsMargins(10, 0, 0, 0)
-        name_hint.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #999;
-            }
-        """)
-        name_layout.addWidget(name_hint)
         name_layout.addStretch()
 
-        info_layout.addLayout(name_layout)
+        name_container.addLayout(name_layout)
+
+        # 问号提示图标
+        help_icon = QLabel("ⓘ")
+        help_icon.setFixedSize(20, 20)
+        help_icon.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #999;
+                background-color: transparent;
+            }
+            QLabel:hover {
+                color: #007aff;
+            }
+        """)
+        help_icon.setToolTip("修改将同步到本地 Git 全局配置")
+        help_icon.setCursor(Qt.PointingHandCursor)
+        name_container.addWidget(help_icon)
+
+        name_container.addStretch()
+
+        info_layout.addLayout(name_container)
         user_layout.addLayout(info_layout)
         user_group.setLayout(user_layout)
         layout.addWidget(user_group)
