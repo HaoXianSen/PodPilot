@@ -48,22 +48,31 @@ class TagHistoryDialog(QDialog):
         filter_layout.addWidget(QLabel("操作类型:"), 0, 0)
         self.operation_combo = QComboBox()
         self.operation_combo.addItems(
-            ["全部", "create", "switch_to_tag", "switch_to_normal", "rollback"]
+            [
+                "全部",
+                "create",
+                "switch_to_tag",
+                "switch_to_branch",
+                "switch_to_dev",
+                "exit_dev",
+                "switch_to_normal",
+                "rollback",
+            ]
         )
         self.operation_combo.currentIndexChanged.connect(self.filter_history)
         filter_layout.addWidget(self.operation_combo, 0, 1)
 
         filter_layout.addWidget(QLabel("显示数量:"), 0, 2)
         self.limit_combo = QComboBox()
-        self.limit_combo.addItems(["10", "20", "50", "100"])
-        self.limit_combo.setCurrentText("20")
+        self.limit_combo.addItems(["20", "50", "100", "200"])
+        self.limit_combo.setCurrentText("50")
         self.limit_combo.currentIndexChanged.connect(self.load_history)
         filter_layout.addWidget(self.limit_combo, 0, 3)
 
         # 第二行：搜索和日期范围
-        filter_layout.addWidget(QLabel("搜索Tag:"), 1, 0)
+        filter_layout.addWidget(QLabel("搜索关键词:"), 1, 0)
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("输入Tag名称搜索...")
+        self.search_edit.setPlaceholderText("输入Tag/分支/路径搜索...")
         self.search_edit.textChanged.connect(self.filter_history)
         filter_layout.addWidget(self.search_edit, 1, 1)
 
