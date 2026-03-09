@@ -326,3 +326,67 @@ class PodService:
                 result["data"] = {"git": match.group(1)}
 
         return result
+
+    @staticmethod
+    def restore_pod_to_mode(
+        podfile_lines: List[str],
+        pod_name: str,
+        mode: str,
+        mode_data: Dict[str, Any],
+        original_line: Union[str, None] = None,
+    ) -> Tuple[List[str], bool]:
+        """将 Pod 恢复到指定模式
+
+        Args:
+            podfile_lines: Podfile 行列表
+            pod_name: Pod 名称
+            mode: 目标模式 ('branch', 'tag', 'git')
+            mode_data: 模式数据
+            original_line: 原始行（备用）
+
+        Returns:
+            (新行列表, 是否修改成功)
+        """
+        if mode == "branch":
+            branch_name = mode_data.get("branch", "")
+            if branch_name:
+                return PodService.switch_pod_mode(
+                    podfile_lines, pod_name, "branch", branch_name
+                )
+
+        elif mode == "tag":
+            tag_name = mode_data.get("tag", "")
+            if tag_name:
+                return PodService.switch_pod_mode(
+                    podfile_lines, pod_name, "tag", tag_name
+                )
+
+        elif mode == "git":
+            git_url = mode_data.get("git", "")
+            if git_url and original_line:
+                new_lines = podfile_lines.copy()
+                start_idx, end_idx, _ = PodService.get_full_pod_declaration(
+                    new_lines, pod_name
+                )
+
+                if start_idx is not None and end_idx is not None:
+                    if start_idx == end_idx:
+                        new_lines[start_idx] = original_line + "\n"
+                    else:
+                        new_lines[start_idx:end_idx] = [original_line + "\n"]
+                    return new_lines, True
+
+        if original_line:
+            new_lines = podfile_lines.copy()
+            start_idx, end_idx, _ = PodService.get_full_pod_declaration(
+                new_lines, pod_name
+            )
+
+            if start_idx is not None and end_idx is not None:
+                if start_idx == end_idx:
+                    new_lines[start_idx] = original_line + "\n"
+                else:
+                    new_lines[start_idx:end_idx] = [original_line + "\n"]
+                return new_lines, True
+
+        return podfile_lines, False

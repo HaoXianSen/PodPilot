@@ -1228,8 +1228,92 @@ class PodPilot(QMainWindow):
             QMessageBox.critical(self, "错误", f"切换失败: {str(e)}")
 
     def exit_dev_mode(self):
-        """退出开发模式 - 将选中的开发模式 Pod 恢复为正常引用"""
-        pass
+        """退出开发模式，恢复到上次的模式"""
+        if not self.current_project:
+            QMessageBox.warning(self, "警告", "请先选择项目")
+            return
+
+        current_items = self.pod_list.selectedItems()
+        if not current_items:
+            QMessageBox.warning(self, "警告", "请先选择要切换的Pod")
+            return
+
+        podfile_path = os.path.join(self.current_project, "Podfile")
+        if not os.path.exists(podfile_path):
+            QMessageBox.warning(self, "错误", "未找到Podfile")
+            return
+
+        try:
+            with open(podfile_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            new_lines = lines.copy()
+            restored_count = 0
+
+            for item in current_items:
+                pod_name = self.get_pod_name_from_item(item)
+
+                current_mode = self._get_pod_mode_from_item(item)
+                if current_mode != "dev":
+                    self.log_message(f"{pod_name} 不在开发模式，跳过")
+                    continue
+
+                last_mode_info = self.config_service.get_last_pod_mode(
+                    self.current_project, pod_name
+                )
+
+                original_reference = self.config_service.get_original_pod_reference(
+                    self.current_project, pod_name
+                )
+
+                if last_mode_info:
+                    mode = last_mode_info["mode"]
+                    mode_data = last_mode_info["data"]
+                    original_line = (
+                        original_reference["line"] if original_reference else None
+                    )
+
+                    new_lines, modified = PodService.restore_pod_to_mode(
+                        new_lines, pod_name, mode, mode_data, original_line
+                    )
+
+                    if modified:
+                        self.log_message(f"已将 {pod_name} 恢复到{mode}模式")
+                        restored_count += 1
+                    else:
+                        self.log_message(f"{pod_name} 恢复失败")
+
+                elif original_reference:
+                    original_line = original_reference["line"]
+                    new_lines, modified = PodService.switch_pod_mode(
+                        new_lines, pod_name, "normal", original_line=original_line
+                    )
+
+                    if modified:
+                        self.log_message(f"已将 {pod_name} 恢复到原始引用")
+                        restored_count += 1
+                else:
+                    self.log_message(
+                        f"{pod_name} 无法退出开发模式：缺少上次模式记录和原始引用"
+                    )
+
+            with open(podfile_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+
+            self.load_pods(self.current_project)
+
+            if restored_count > 0:
+                reply = QMessageBox.question(
+                    self,
+                    "确认",
+                    f"已退出开发模式（{restored_count}个Pod），是否执行 pod install?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply == QMessageBox.Yes:
+                    self.run_pod_install()
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"退出开发模式失败: {str(e)}")
 
     def create_tag_for_pod(self):
         current_items = self.pod_list.selectedItems()
