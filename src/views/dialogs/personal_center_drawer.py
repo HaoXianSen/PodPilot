@@ -295,6 +295,24 @@ class PersonalCenterDrawer(QWidget):
         name_container.setContentsMargins(10, 0, 0, 0)
         name_container.setSpacing(4)
 
+        # 问号提示图标
+        help_icon = QLabel("ⓘ")
+        help_icon.setFixedSize(16, 36)
+        help_icon.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #999;
+                background-color: transparent;
+                border: none;
+            }
+            QLabel:hover {
+                color: #007aff;
+            }
+        """)
+        help_icon.setToolTip("修改将同步到本地 Git 全局配置")
+        help_icon.setCursor(Qt.PointingHandCursor)
+        name_container.addWidget(help_icon, 0, Qt.AlignVCenter)
+
         username = self.get_git_username()
         self.name_input = QLineEdit(username)
         self.name_input.setFixedHeight(36)
@@ -318,24 +336,6 @@ class PersonalCenterDrawer(QWidget):
             }
         """)
         name_container.addWidget(self.name_input)
-
-        # 问号提示图标
-        help_icon = QLabel("ⓘ")
-        help_icon.setFixedSize(16, 36)
-        help_icon.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #999;
-                background-color: transparent;
-                border: none;
-            }
-            QLabel:hover {
-                color: #007aff;
-            }
-        """)
-        help_icon.setToolTip("修改将同步到本地 Git 全局配置")
-        help_icon.setCursor(Qt.PointingHandCursor)
-        name_container.addWidget(help_icon, 0, Qt.AlignVCenter)
 
         name_container.addStretch()
 
