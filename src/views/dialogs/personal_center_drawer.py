@@ -14,55 +14,113 @@ from PyQt5.QtWidgets import (
     QFrame,
     QScrollArea,
     QSizePolicy,
+    QFileDialog,
 )
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QTextCursor, QPen
+from PyQt5.QtGui import (
+    QPixmap,
+    QPainter,
+    QColor,
+    QTextCursor,
+    QPen,
+    QPainterPath,
+    QBrush,
+)
 from PyQt5.QtCore import (
     Qt,
     QPropertyAnimation,
     QPoint,
     QEasingCurve,
     QEvent,
+    pyqtSignal,
 )
 from src.views.dialogs.my_mr_dialog import MyMRDialog
 
 
-class AvatarWidget(QWidget):
-    """自定义头像Widget - 直接在paintEvent中绘制避免裁剪"""
+class ClickableAvatar(QWidget):
+    """可点击的头像组件"""
+
+    clicked = pyqtSignal()
 
     def __init__(self, size=64, parent=None):
         super().__init__(parent)
         self.setFixedSize(size, size)
         self._size = size
+        self._avatar_path = None
+        self._pixmap = None
+        self._hover = False
+        self.setCursor(Qt.PointingHandCursor)
 
-    def paintEvent(self, a0):
+    def set_avatar_path(self, path):
+        """设置头像图片路径"""
+        self._avatar_path = path
+        if path:
+            self._pixmap = QPixmap(path)
+        else:
+            self._pixmap = None
+        self.update()
+
+    def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         w = self._size
         h = self._size
 
-        # 绘制蓝色背景圆
-        painter.setBrush(QColor("#007aff"))
-        painter.setPen(QPen(QColor("transparent")))
-        painter.drawEllipse(0, 0, w, h)
+        if self._pixmap and not self._pixmap.isNull():
+            # 绘制图片
+            scaled = self._pixmap.scaled(
+                w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+            )
 
-        # 绘制白色人形
-        painter.setBrush(QColor("white"))
+            clip_path = QPainterPath()
+            clip_path.addEllipse(0, 0, w, h)
+            painter.setClipPath(clip_path)
+            painter.drawPixmap(0, 0, scaled)
+        else:
+            # 绘制默认头像
+            painter.setBrush(QBrush(QColor("#007aff")))
+            painter.setPen(QPen(QColor("transparent")))
+            painter.drawEllipse(0, 0, w, h)
 
-        # 头部
-        head_w = int(w * 0.3)
-        head_h = int(h * 0.3)
-        head_x = (w - head_w) // 2
-        head_y = int(h * 0.12)
+            painter.setBrush(QBrush(QColor("white")))
 
-        # 身体
-        body_w = int(w * 0.5)
-        body_h = int(h * 0.4)
-        body_x = (w - body_w) // 2
-        body_y = int(h * 0.5)
+            head_w = int(w * 0.3)
+            head_h = int(h * 0.3)
+            head_x = (w - head_w) // 2
+            head_y = int(h * 0.12)
 
-        painter.drawEllipse(head_x, head_y, head_w, head_h)
-        painter.drawEllipse(body_x, body_y, body_w, body_h)
+            body_w = int(w * 0.5)
+            body_h = int(h * 0.4)
+            body_x = (w - body_w) // 2
+            body_y = int(h * 0.5)
+
+            painter.drawEllipse(head_x, head_y, head_w, head_h)
+            painter.drawEllipse(body_x, body_y, body_w, body_h)
+
+        # Hover 效果
+        if self._hover:
+            painter.setBrush(QBrush(QColor(0, 0, 0, 100)))
+            painter.setPen(QPen(QColor("transparent")))
+            painter.drawEllipse(0, 0, w, h)
+
+            # 绘制编辑图标或文字
+            painter.setPen(QPen(QColor("white")))
+            font = painter.font()
+            font.setPointSize(10)
+            painter.setFont(font)
+            painter.drawText(0, 0, w, h, Qt.AlignCenter, "编辑")
+
+    def enterEvent(self, event):
+        self._hover = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self._hover = False
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
 
 
 class PersonalCenterDrawer(QWidget):
@@ -218,7 +276,7 @@ class PersonalCenterDrawer(QWidget):
         # 头像和名字
         info_layout = QHBoxLayout()
 
-        avatar_label = AvatarWidget(size=64)
+        avatar_label = ClickableAvatar(size=64)
         info_layout.addWidget(avatar_label)
 
         # 名字
