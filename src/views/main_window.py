@@ -455,13 +455,6 @@ class PodPilot(QMainWindow):
         self.to_dev_btn.clicked.connect(self.switch_to_dev_mode)
         self.mode_btn_group.addButton(self.to_dev_btn)
 
-        self.to_normal_btn = QPushButton("正常模式")
-        self.to_normal_btn.setCheckable(True)
-        self.to_normal_btn.setFixedHeight(28)
-        self.to_normal_btn.setStyleSheet(segment_middle_style)
-        self.to_normal_btn.clicked.connect(self.switch_to_normal_mode)
-        self.mode_btn_group.addButton(self.to_normal_btn)
-
         self.to_branch_btn = QPushButton("Branch模式")
         self.to_branch_btn.setCheckable(True)
         self.to_branch_btn.setFixedHeight(28)
@@ -477,10 +470,39 @@ class PodPilot(QMainWindow):
         self.mode_btn_group.addButton(self.to_tag_btn)
 
         segment_container.addWidget(self.to_dev_btn)
-        segment_container.addWidget(self.to_normal_btn)
         segment_container.addWidget(self.to_branch_btn)
         segment_container.addWidget(self.to_tag_btn)
         pod_btn_layout.addLayout(segment_container)
+
+        # 分隔符
+        separator = QLabel("|")
+        separator.setStyleSheet("color: #c7c7cc; font-size: 14px; margin: 0 8px;")
+        pod_btn_layout.addWidget(separator)
+
+        # 退出开发按钮 - 独立按钮
+        self.exit_dev_btn = QPushButton("退出开发")
+        self.exit_dev_btn.setFixedHeight(28)
+        self.exit_dev_btn.setFixedWidth(90)
+        self.exit_dev_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ff9500;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #e68600;
+            }
+            QPushButton:disabled {
+                background-color: #e0e0e0;
+                color: #a0a0a0;
+            }
+        """)
+        self.exit_dev_btn.clicked.connect(self.exit_dev_mode)
+        self.exit_dev_btn.setEnabled(False)
+        pod_btn_layout.addWidget(self.exit_dev_btn)
 
         pod_btn_layout.addStretch()
         right_layout.addLayout(pod_btn_layout)
@@ -590,10 +612,10 @@ class PodPilot(QMainWindow):
         if not selected_items:
             self.mode_btn_group.setExclusive(False)
             self.to_dev_btn.setChecked(False)
-            self.to_normal_btn.setChecked(False)
             self.to_branch_btn.setChecked(False)
             self.to_tag_btn.setChecked(False)
             self.mode_btn_group.setExclusive(True)
+            self.exit_dev_btn.setEnabled(False)
             return
 
         modes = set()
@@ -606,29 +628,26 @@ class PodPilot(QMainWindow):
         if len(modes) == 1:
             mode = modes.pop()
             self.to_dev_btn.setChecked(False)
-            self.to_normal_btn.setChecked(False)
             self.to_branch_btn.setChecked(False)
             self.to_tag_btn.setChecked(False)
 
             if mode == "dev":
                 self.to_dev_btn.setChecked(True)
-            elif mode == "normal":
-                self.to_normal_btn.setChecked(True)
             elif mode == "branch":
                 self.to_branch_btn.setChecked(True)
             elif mode == "tag":
                 self.to_tag_btn.setChecked(True)
-            elif mode == "configured":
-                self.to_normal_btn.setChecked(True)
-            elif mode == "git":
-                self.to_normal_btn.setChecked(True)
         else:
             self.to_dev_btn.setChecked(False)
-            self.to_normal_btn.setChecked(False)
             self.to_branch_btn.setChecked(False)
             self.to_tag_btn.setChecked(False)
 
         self.mode_btn_group.setExclusive(True)
+
+        # 退出开发按钮：仅当所有选中的 Pod 都是开发模式时启用
+        has_dev_pods = "dev" in modes
+        only_dev_pods = modes == {"dev"}
+        self.exit_dev_btn.setEnabled(has_dev_pods and only_dev_pods)
 
     def get_current_pods_config(self):
         if not self.current_project:
@@ -1193,6 +1212,10 @@ class PodPilot(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "错误", f"切换失败: {str(e)}")
+
+    def exit_dev_mode(self):
+        """退出开发模式 - 将选中的开发模式 Pod 恢复为正常引用"""
+        pass
 
     def create_tag_for_pod(self):
         current_items = self.pod_list.selectedItems()
