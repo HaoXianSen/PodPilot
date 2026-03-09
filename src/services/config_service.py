@@ -17,6 +17,7 @@ class ConfigService:
         self.current_project = None
         self.gitlab_token = ""
         self.github_token = ""
+        self.custom_avatar_path = ""
 
     def load_config(self) -> bool:
         """加载配置文件"""
@@ -50,6 +51,9 @@ class ConfigService:
             if "github_token" in config:
                 self.github_token = config["github_token"]
 
+            if "custom_avatar_path" in config:
+                self.custom_avatar_path = config["custom_avatar_path"]
+
             if "last_pod_modes" in config:
                 self.last_pod_modes = config["last_pod_modes"]
 
@@ -68,6 +72,7 @@ class ConfigService:
             "last_pod_modes": self.last_pod_modes,
             "gitlab_token": self.gitlab_token,
             "github_token": self.github_token,
+            "custom_avatar_path": self.custom_avatar_path,
         }
 
         if self.current_project:
