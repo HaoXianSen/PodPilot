@@ -315,16 +315,6 @@ class PersonalCenterDrawer(QWidget):
             }
         """)
         name_layout.addWidget(self.name_input)
-
-        email_label = QLabel("Git用户")
-        email_label.setContentsMargins(10, 0, 0, 0)
-        email_label.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #999;
-            }
-        """)
-        name_layout.addWidget(email_label)
         name_layout.addStretch()
 
         info_layout.addLayout(name_layout)
