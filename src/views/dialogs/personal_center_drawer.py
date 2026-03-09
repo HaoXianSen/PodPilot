@@ -309,7 +309,7 @@ class PersonalCenterDrawer(QWidget):
                 color: #007aff;
             }
         """)
-        help_icon.setToolTip("修改将同步到本地 Git 全局配置")
+        help_icon.setToolTip("修改名字将同步到git本地配置")
         help_icon.setCursor(Qt.PointingHandCursor)
         name_container.addWidget(help_icon, 0, Qt.AlignVCenter)
 
