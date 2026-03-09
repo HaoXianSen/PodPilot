@@ -47,17 +47,24 @@ class TagHistoryManager:
         except Exception as e:
             print(f"保存Tag历史记录失败: {str(e)}")
 
-    def record_tag_operation(
-        self, project_path, pod_name, operation, tag_name, details=None
+    def record_operation(
+        self, project_path, pod_name, operation, reference_info=None, details=None
     ):
         """
-        记录tag操作
+        记录Pod操作
 
         Args:
             project_path: 项目路径
             pod_name: Pod名称
-            operation: 操作类型（create, switch_to_tag, switch_to_normal等）
-            tag_name: Tag名称
+            operation: 操作类型
+                - create: 创建Tag
+                - switch_to_tag: 切换到Tag模式
+                - switch_to_branch: 切换到Branch模式
+                - switch_to_dev: 切换到开发模式
+                - exit_dev: 退出开发模式
+                - switch_to_normal: 恢复到普通模式
+                - rollback: 回滚操作
+            reference_info: 引用信息（Tag名/分支名/路径等）
             details: 额外详情
         """
         key = f"{project_path}:{pod_name}"
@@ -68,17 +75,33 @@ class TagHistoryManager:
         record = {
             "timestamp": datetime.now().isoformat(),
             "operation": operation,
-            "tag_name": tag_name,
+            "reference_info": reference_info or "",
             "details": details or {},
         }
 
         self.history[key].append(record)
 
-        # 只保留最近50条记录
-        if len(self.history[key]) > 50:
-            self.history[key] = self.history[key][-50:]
+        # 只保留最近100条记录
+        if len(self.history[key]) > 100:
+            self.history[key] = self.history[key][-100:]
 
         self.save_history()
+
+    # 保留旧方法名以保持向后兼容
+    def record_tag_operation(
+        self, project_path, pod_name, operation, tag_name, details=None
+    ):
+        """
+        记录tag操作（向后兼容方法）
+
+        Args:
+            project_path: 项目路径
+            pod_name: Pod名称
+            operation: 操作类型（create, switch_to_tag, switch_to_normal等）
+            tag_name: Tag名称
+            details: 额外详情
+        """
+        self.record_operation(project_path, pod_name, operation, tag_name, details)
 
     def get_pod_tag_history(
         self, project_path, pod_name, limit=10, operation_type=None
