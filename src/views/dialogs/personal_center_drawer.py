@@ -315,6 +315,17 @@ class PersonalCenterDrawer(QWidget):
             }
         """)
         name_layout.addWidget(self.name_input)
+
+        # 名称提示
+        name_hint = QLabel("修改将同步到本地 Git 全局配置")
+        name_hint.setContentsMargins(10, 0, 0, 0)
+        name_hint.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #999;
+            }
+        """)
+        name_layout.addWidget(name_hint)
         name_layout.addStretch()
 
         info_layout.addLayout(name_layout)
@@ -594,22 +605,6 @@ class PersonalCenterDrawer(QWidget):
         # 保存名称到 Git 配置
         new_name = self.name_input.text().strip()
         if new_name:
-            # 获取当前 Git 用户名
-            current_name = self.get_git_username()
-
-            # 如果名称有变化，提示用户
-            if new_name != current_name:
-                reply = QMessageBox.question(
-                    self,
-                    "确认修改",
-                    f"名称将同步修改本地 Git 全局配置：\n\n{current_name} → {new_name}\n\n是否继续？",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes,
-                )
-
-                if reply == QMessageBox.No:
-                    return
-
             from src.services.git_service import GitService
 
             if not GitService.set_username(new_name):
