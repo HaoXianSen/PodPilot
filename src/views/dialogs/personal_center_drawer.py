@@ -293,7 +293,7 @@ class PersonalCenterDrawer(QWidget):
         token_layout.addWidget(gitlab_help)
 
         # GitHub Token
-        github_label = QLabel("GitHuersonal Access Token:")
+        github_label = QLabel("GitHub Personal Access Token:")
         github_label.setStyleSheet("""
             QLabel {
                 border: none;
