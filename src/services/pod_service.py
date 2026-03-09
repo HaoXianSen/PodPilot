@@ -287,3 +287,42 @@ class PodService:
             modified = True
 
         return new_lines, modified
+
+    @staticmethod
+    def extract_pod_mode_info(pod_declaration: str) -> Dict[str, Any]:
+        """从 Pod 声明中提取模式信息
+
+        Args:
+            pod_declaration: Pod 的完整声明（可能跨多行）
+
+        Returns:
+            {'mode': 'branch'|'tag'|'git'|'dev'|'normal', 'data': {...}}
+            例如: {'mode': 'branch', 'data': {'branch': 'feature/test'}}
+        """
+        result = {"mode": "normal", "data": {}}
+
+        if ":path" in pod_declaration:
+            result["mode"] = "dev"
+            match = re.search(r":path\s*=>\s*['\"]([^'\"]+)['\"]", pod_declaration)
+            if match:
+                result["data"] = {"path": match.group(1)}
+
+        elif ":branch" in pod_declaration:
+            result["mode"] = "branch"
+            match = re.search(r":branch\s*=>\s*['\"]([^'\"]+)['\"]", pod_declaration)
+            if match:
+                result["data"] = {"branch": match.group(1)}
+
+        elif ":tag" in pod_declaration:
+            result["mode"] = "tag"
+            match = re.search(r":tag\s*=>\s*['\"]([^'\"]+)['\"]", pod_declaration)
+            if match:
+                result["data"] = {"tag": match.group(1)}
+
+        elif ":git" in pod_declaration:
+            result["mode"] = "git"
+            match = re.search(r":git\s*=>\s*['\"]([^'\"]+)['\"]", pod_declaration)
+            if match:
+                result["data"] = {"git": match.group(1)}
+
+        return result
