@@ -13,6 +13,7 @@ class ConfigService:
         self.projects = []
         self.pods_config = {}
         self.original_pod_references = {}
+        self.last_pod_modes = {}
         self.current_project = None
         self.gitlab_token = ""
         self.github_token = ""
@@ -49,6 +50,9 @@ class ConfigService:
             if "github_token" in config:
                 self.github_token = config["github_token"]
 
+            if "last_pod_modes" in config:
+                self.last_pod_modes = config["last_pod_modes"]
+
             return True
 
         except Exception as e:
@@ -61,6 +65,7 @@ class ConfigService:
             "projects": self.projects,
             "pods_config": self.pods_config,
             "original_pod_references": self.original_pod_references,
+            "last_pod_modes": self.last_pod_modes,
             "gitlab_token": self.gitlab_token,
             "github_token": self.github_token,
         }
@@ -128,4 +133,41 @@ class ConfigService:
             and pod_name in self.original_pod_references[project_path]
         ):
             return self.original_pod_references[project_path][pod_name]
+        return None
+
+    def save_last_pod_mode(
+        self, project_path: str, pod_name: str, mode: str, mode_data: Dict[str, Any]
+    ):
+        """保存 Pod 的上次模式信息
+
+        Args:
+            project_path: 项目路径
+            pod_name: Pod 名称
+            mode: 模式类型 ('branch', 'tag', 'git')
+            mode_data: 模式数据 (如 {'branch': 'feature/test'})
+        """
+        if project_path not in self.last_pod_modes:
+            self.last_pod_modes[project_path] = {}
+
+        self.last_pod_modes[project_path][pod_name] = {"mode": mode, "data": mode_data}
+        self.save_config()
+
+    def get_last_pod_mode(
+        self, project_path: str, pod_name: str
+    ) -> Union[Dict[str, Any], None]:
+        """获取 Pod 的上次模式信息
+
+        Args:
+            project_path: 项目路径
+            pod_name: Pod 名称
+
+        Returns:
+            上次模式信息，如 {'mode': 'branch', 'data': {'branch': 'feature/test'}}
+            如果没有记录返回 None
+        """
+        if (
+            project_path in self.last_pod_modes
+            and pod_name in self.last_pod_modes[project_path]
+        ):
+            return self.last_pod_modes[project_path][pod_name]
         return None
