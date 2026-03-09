@@ -167,7 +167,7 @@ class PodPilot(QMainWindow):
 
         self.avatar_btn = AvatarButton()
         self.avatar_btn.clicked.connect(self.toggle_personal_drawer)
-        right_corner_layout.addWidget(self.avatar_btn)
+        right_corner_layout.addWidget(self.avatar_btn, 0, Qt.AlignVCenter)
 
         username = GitService.get_username()
         self.username_btn = QPushButton(username)
@@ -187,7 +187,7 @@ class PodPilot(QMainWindow):
             }
         """)
         self.username_btn.clicked.connect(self.toggle_personal_drawer)
-        right_corner_layout.addWidget(self.username_btn)
+        right_corner_layout.addWidget(self.username_btn, 0, Qt.AlignVCenter)
 
         top_bar_layout.addLayout(right_corner_layout)
         main_layout.addWidget(top_bar)
