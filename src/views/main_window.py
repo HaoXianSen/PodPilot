@@ -623,10 +623,12 @@ class PodPilot(QMainWindow):
             mode = self._get_pod_mode_from_item(item)
             modes.add(mode)
 
+        # 更新 Segmented Control 选中状态
         self.mode_btn_group.setExclusive(False)
 
         if len(modes) == 1:
-            mode = modes.pop()
+            # 不要用 pop()，它会移除元素！使用迭代器获取唯一元素
+            mode = next(iter(modes))
             self.to_dev_btn.setChecked(False)
             self.to_branch_btn.setChecked(False)
             self.to_tag_btn.setChecked(False)
@@ -1116,6 +1118,10 @@ class PodPilot(QMainWindow):
             QMessageBox.warning(self, "错误", "未找到Podfile")
             return
 
+        selected_pod_names = [
+            self.get_pod_name_from_item(item) for item in current_items
+        ]
+
         try:
             with open(podfile_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -1156,6 +1162,12 @@ class PodPilot(QMainWindow):
                 f.writelines(new_lines)
 
             self.load_pods(self.current_project)
+
+            for i in range(self.pod_list.count()):
+                item = self.pod_list.item(i)
+                pod_name = self.get_pod_name_from_item(item)
+                if pod_name in selected_pod_names:
+                    item.setSelected(True)
 
             reply = QMessageBox.question(
                 self,
