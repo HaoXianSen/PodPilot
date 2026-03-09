@@ -42,7 +42,6 @@ from src.widgets.loading_widget import LoadingWidget
 from src.views.dialogs.merge_request_dialog import MergeRequestDialog, MRInfoCollector
 from src.views.dialogs.personal_center_drawer import PersonalCenterDrawer
 from src.views.dialogs.project_mr_dialog import ProjectMRDialog
-from src.views.dialogs.tag_history_dialog import TagHistoryDialog
 
 from src.services import (
     ConfigService,
@@ -52,7 +51,7 @@ from src.services import (
     PodCacheService,
 )
 from src.components import AvatarButton
-from src.models.tag_history_manager import TagHistoryManager
+from src.utils.podfile_reader import PodfileReader
 
 
 class RemoteTagLoader(QThread):
@@ -82,6 +81,7 @@ class PodPilot(QMainWindow):
         self.config_service = ConfigService()
         self.pod_install_service = PodInstallService(log_callback=self.log_message)
         self.pod_cache_service = PodCacheService(log_callback=self.log_message)
+        self.podfile_reader = None  # 将在选择项目时初始化
 
         self.personal_config = self._load_personal_config()
 
