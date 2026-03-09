@@ -156,6 +156,9 @@ class PersonalCenterDrawer(QWidget):
             # 只更新token字段，保留其他配置
             existing_config["gitlab_token"] = self.config.get("gitlab_token", "")
             existing_config["github_token"] = self.config.get("github_token", "")
+            existing_config["custom_avatar_path"] = self.config.get(
+                "custom_avatar_path", ""
+            )
 
             # 保存完整配置
             with open(self.config_path, "w", encoding="utf-8") as f:
@@ -276,22 +279,42 @@ class PersonalCenterDrawer(QWidget):
         # 头像和名字
         info_layout = QHBoxLayout()
 
-        avatar_label = ClickableAvatar(size=64)
-        info_layout.addWidget(avatar_label)
+        # 头像（可点击）
+        self.avatar_widget = ClickableAvatar(size=64)
+        self.avatar_widget.clicked.connect(self._on_avatar_clicked)
+
+        # 加载自定义头像
+        custom_avatar = self.config.get("custom_avatar_path", "")
+        if custom_avatar and os.path.exists(custom_avatar):
+            self.avatar_widget.set_avatar_path(custom_avatar)
+
+        info_layout.addWidget(self.avatar_widget)
 
         # 名字
         name_layout = QVBoxLayout()
         username = self.get_git_username()
-        self.name_label = QLabel(username)
-        self.name_label.setContentsMargins(10, 0, 0, 0)
-        self.name_label.setStyleSheet("""
-            QLabel {
+        self.name_input = QLineEdit(username)
+        self.name_input.setContentsMargins(10, 0, 0, 0)
+        self.name_input.setStyleSheet("""
+            QLineEdit {
                 font-size: 16px;
                 font-weight: bold;
                 color: #333;
+                border: 1px solid transparent;
+                padding: 4px 8px;
+                border-radius: 4px;
+                background: transparent;
+            }
+            QLineEdit:hover {
+                border: 1px solid #e5e5e5;
+                background: white;
+            }
+            QLineEdit:focus {
+                border: 1px solid #007aff;
+                background: white;
             }
         """)
-        name_layout.addWidget(self.name_label)
+        name_layout.addWidget(self.name_input)
 
         email_label = QLabel("Git用户")
         email_label.setContentsMargins(10, 0, 0, 0)
@@ -557,25 +580,53 @@ class PersonalCenterDrawer(QWidget):
             self.slide_animation.finished.connect(self.hide)
             self.slide_animation.start()
 
+    def _on_avatar_clicked(self):
+        """头像点击处理"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择头像", "", "图片文件 (*.jpg *.jpeg *.png);;所有文件 (*)"
+        )
+
+        if file_path:
+            # 立即显示预览
+            self.avatar_widget.set_avatar_path(file_path)
+
+            # 保存到配置
+            self.config["custom_avatar_path"] = file_path
+
     def save_tokens(self):
-        """保存Token"""
+        """保存配置（包括头像和名称）"""
         gitlab_token = self.gitlab_token_input.text().strip()
         github_token = self.github_token_input.text().strip()
 
         self.config["gitlab_token"] = gitlab_token
         self.config["github_token"] = github_token
 
+        # 保存名称到 Git 配置
+        new_name = self.name_input.text().strip()
+        if new_name:
+            from src.services.git_service import GitService
+
+            if not GitService.set_username(new_name):
+                QMessageBox.warning(self, "警告", "名称保存到 Git 配置失败")
+
+        # 保存配置
+        self._save_config_and_close()
+
+    def _save_config_and_close(self):
+        """保存配置并关闭"""
         self.save_config()
 
         # 同步更新主窗口的 personal_config
         if self.parent_manager and hasattr(self.parent_manager, "personal_config"):
-            self.parent_manager.personal_config["gitlab_token"] = gitlab_token
-            self.parent_manager.personal_config["github_token"] = github_token
+            self.parent_manager.personal_config["gitlab_token"] = self.config.get(
+                "gitlab_token", ""
+            )
+            self.parent_manager.personal_config["github_token"] = self.config.get(
+                "github_token", ""
+            )
 
         if self.parent_manager:
-            self.parent_manager.log_message(
-                f"个人中心配置已保存: GitLab Token={bool(gitlab_token)}, GitHub Token={bool(github_token)}"
-            )
+            self.parent_manager.log_message("个人中心配置已保存")
 
         QMessageBox.information(self, "成功", "配置已保存")
         self.slide_out()
