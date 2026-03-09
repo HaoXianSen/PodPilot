@@ -197,3 +197,26 @@ class GitService:
         except subprocess.CalledProcessError as e:
             print(f"推送分支失败: {str(e)}")
             return False
+
+    @staticmethod
+    def set_username(username: str) -> bool:
+        """设置 Git 全局用户名
+
+        Args:
+            username: 新的用户名
+
+        Returns:
+            成功返回 True，失败返回 False
+        """
+        try:
+            result = subprocess.run(
+                ["git", "config", "--global", "user.name", username],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            return result.returncode == 0
+        except Exception as e:
+            print(f"设置 Git 用户名失败: {str(e)}")
+            return False
