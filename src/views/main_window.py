@@ -82,6 +82,7 @@ class PodPilot(QMainWindow):
         self.config_service = ConfigService()
         self.pod_install_service = PodInstallService(log_callback=self.log_message)
         self.pod_cache_service = PodCacheService(log_callback=self.log_message)
+        self.history_manager = TagHistoryManager(self.config_service.config_path)
 
         self.personal_config = self._load_personal_config()
 
@@ -1162,6 +1163,13 @@ class PodPilot(QMainWindow):
 
                 if modified:
                     self.log_message(f"已将 {pod_name} 切换到开发模式")
+                    # 记录操作历史
+                    self.history_manager.record_operation(
+                        self.current_project,
+                        pod_name,
+                        "switch_to_dev",
+                        f"local_path: {local_path}",
+                    )
 
             with open(podfile_path, "w", encoding="utf-8") as f:
                 f.writelines(new_lines)
@@ -1297,6 +1305,14 @@ class PodPilot(QMainWindow):
                     if modified:
                         self.log_message(f"已将 {pod_name} 恢复到{mode}模式")
                         restored_count += 1
+                        # 记录操作历史
+                        self.history_manager.record_operation(
+                            self.current_project,
+                            pod_name,
+                            "exit_dev",
+                            f"restored_to: {mode}",
+                            {"from": "dev", "to": mode},
+                        )
                     else:
                         self.log_message(f"{pod_name} 恢复失败")
 
@@ -1309,6 +1325,14 @@ class PodPilot(QMainWindow):
                     if modified:
                         self.log_message(f"已将 {pod_name} 恢复到原始引用")
                         restored_count += 1
+                        # 记录操作历史
+                        self.history_manager.record_operation(
+                            self.current_project,
+                            pod_name,
+                            "exit_dev",
+                            "restored_to: original",
+                            {"from": "dev", "to": "normal"},
+                        )
                 else:
                     self.log_message(
                         f"{pod_name} 无法退出开发模式：缺少上次模式记录和原始引用"
@@ -1422,6 +1446,16 @@ class PodPilot(QMainWindow):
 
         dialog = BatchBranchDialog(pods_info, podfile_path, None, self)
         if dialog.exec_() == QDialog.Accepted:
+            # 记录分支模式切换历史
+            for pod_info in pods_info:
+                if pod_info.get("selected_branch"):
+                    self.history_manager.record_operation(
+                        self.current_project,
+                        pod_info["name"],
+                        "switch_to_branch",
+                        f"branch: {pod_info['selected_branch']}",
+                    )
+
             self.log_message("批量切换到Branch模式完成")
             self.load_pods(self.current_project)
 
@@ -2138,19 +2172,26 @@ class PodPilot(QMainWindow):
             self.personal_drawer.slide_in()
 
     def show_tag_history(self):
+        """显示Pod的操作历史"""
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要查看Tag历史的Pod")
+            QMessageBox.warning(self, "警告", "请先选择要查看历史的Pod")
             return
 
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Tag历史")
-        dialog.resize(800, 600)
+        if len(current_items) > 1:
+            QMessageBox.warning(self, "警告", "一次只能查看一个Pod的历史")
+            return
 
-        layout = QVBoxLayout()
-        text_edit = QTextEdit()
-        text_edit.setReadOnly(True)
-        layout.addWidget(text_edit)
+        item = current_items[0]
+        pod_name = self.get_pod_name_from_item(item)
+
+        dialog = TagHistoryDialog(
+            self.current_project,
+            pod_name,
+            self.config_service.config_path,
+            self,
+        )
+        dialog.exec_()
 
         dialog.setLayout(layout)
 
