@@ -1155,13 +1155,6 @@ class PodPilot(QMainWindow):
 
                 if modified:
                     self.log_message(f"已将 {pod_name} 切换到开发模式")
-                    # 记录操作历史
-                    self.history_manager.record_operation(
-                        self.current_project,
-                        pod_name,
-                        "switch_to_dev",
-                        f"local_path: {local_path}",
-                    )
 
             with open(podfile_path, "w", encoding="utf-8") as f:
                 f.writelines(new_lines)
@@ -1297,14 +1290,6 @@ class PodPilot(QMainWindow):
                     if modified:
                         self.log_message(f"已将 {pod_name} 恢复到{mode}模式")
                         restored_count += 1
-                        # 记录操作历史
-                        self.history_manager.record_operation(
-                            self.current_project,
-                            pod_name,
-                            "exit_dev",
-                            f"restored_to: {mode}",
-                            {"from": "dev", "to": mode},
-                        )
                     else:
                         self.log_message(f"{pod_name} 恢复失败")
 
@@ -1317,14 +1302,6 @@ class PodPilot(QMainWindow):
                     if modified:
                         self.log_message(f"已将 {pod_name} 恢复到原始引用")
                         restored_count += 1
-                        # 记录操作历史
-                        self.history_manager.record_operation(
-                            self.current_project,
-                            pod_name,
-                            "exit_dev",
-                            "restored_to: original",
-                            {"from": "dev", "to": "normal"},
-                        )
                 else:
                     self.log_message(
                         f"{pod_name} 无法退出开发模式：缺少上次模式记录和原始引用"
@@ -1441,14 +1418,7 @@ class PodPilot(QMainWindow):
             # 记录分支模式切换历史
             for pod_info in pods_info:
                 if pod_info.get("selected_branch"):
-                    self.history_manager.record_operation(
-                        self.current_project,
-                        pod_info["name"],
-                        "switch_to_branch",
-                        f"branch: {pod_info['selected_branch']}",
-                    )
-
-            self.log_message("批量切换到Branch模式完成")
+                    self.log_message("批量切换到Branch模式完成")
             self.load_pods(self.current_project)
 
             reply = QMessageBox.question(
