@@ -593,6 +593,7 @@ class PodPilot(QMainWindow):
 
     def _get_pod_mode_from_item(self, item):
         text = item.text()
+
         if "(开发模式)" in text:
             return "dev"
         elif "(分支)" in text:
@@ -601,9 +602,9 @@ class PodPilot(QMainWindow):
             return "tag"
         elif "(Git)" in text:
             return "git"
-        elif "(已配置)" in text:
-            return "configured"
         else:
+            # "已配置" 或普通模式都返回 "normal"
+            # 它们没有特殊引用，只是配置了本地路径
             return "normal"
 
     def update_mode_buttons_state(self):
@@ -1025,6 +1026,7 @@ class PodPilot(QMainWindow):
             is_configured = pod in current_project_config
 
             if priority == 1:
+                # 开发模式
                 icon = self._build_pod_icon(
                     "ic_develop_mode", is_configured, 16, 2, "#34c759"
                 )
@@ -1033,34 +1035,35 @@ class PodPilot(QMainWindow):
                 item.setText(f"{pod} (开发模式)")
                 item.setForeground(QColor("#34c759"))
             elif priority == 2:
+                # 分支模式
                 icon = self._build_pod_icon("branch", is_configured, 16, 2, "#ff9500")
                 if icon:
                     item.setIcon(icon)
                 item.setText(f"{pod} (分支)")
                 item.setForeground(QColor("#ff9500"))
             elif priority == 3:
-                icon = self._build_pod_icon(None, is_configured, 16, 0, "#007aff")
-                if icon:
-                    item.setIcon(icon)
-                item.setText(f"{pod} (已配置)")
-                item.setForeground(QColor("#007aff"))
-            elif priority == 4:
+                # 标签模式
                 icon = self._build_pod_icon("tag_fill", is_configured, 16, 2, "#007aff")
                 if icon:
                     item.setIcon(icon)
                 item.setText(f"{pod} (标签)")
                 item.setForeground(QColor("#007aff"))
-            elif priority == 5:
+            elif priority == 4:
+                # Git 模式
                 icon = self._build_pod_icon("package", is_configured, 16, 2, "#8e8e93")
                 if icon:
                     item.setIcon(icon)
                 item.setText(f"{pod} (Git)")
                 item.setForeground(QColor("#8e8e93"))
             else:
-                icon = self._build_pod_icon("package", False, 16, 0, "#8e8e93")
+                # 普通模式
+                icon = self._build_pod_icon(None, is_configured, 16, 0, "#8e8e93")
                 if icon:
                     item.setIcon(icon)
-                item.setText(f"{pod}")
+                if is_configured:
+                    item.setText(f"{pod} (已配置)")
+                else:
+                    item.setText(f"{pod}")
                 item.setForeground(QColor("#8e8e93"))
 
             self.pod_list.addItem(item)
