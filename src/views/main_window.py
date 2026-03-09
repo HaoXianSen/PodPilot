@@ -87,6 +87,7 @@ class PodPilot(QMainWindow):
 
         self.initUI()
         self.set_modern_style()
+        self._load_avatar()
 
         self.load_config()
 
@@ -102,6 +103,12 @@ class PodPilot(QMainWindow):
         except Exception:
             pass
         return {}
+
+    def _load_avatar(self):
+        """加载自定义头像"""
+        custom_avatar = self.personal_config.get("custom_avatar_path", "")
+        if custom_avatar and os.path.exists(custom_avatar):
+            self.avatar_btn.set_avatar_path(custom_avatar)
 
     def showEvent(self, a0):
         print("[DEBUG] === Layout Debug Info ===")

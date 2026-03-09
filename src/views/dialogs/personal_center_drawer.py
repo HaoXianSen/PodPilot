@@ -624,6 +624,24 @@ class PersonalCenterDrawer(QWidget):
             self.parent_manager.personal_config["github_token"] = self.config.get(
                 "github_token", ""
             )
+            self.parent_manager.personal_config["custom_avatar_path"] = self.config.get(
+                "custom_avatar_path", ""
+            )
+
+        # 更新主窗口头像
+        if self.parent_manager and hasattr(self.parent_manager, "avatar_btn"):
+            custom_avatar = self.config.get("custom_avatar_path", "")
+            self.parent_manager.avatar_btn.set_avatar_path(
+                custom_avatar
+                if custom_avatar and os.path.exists(custom_avatar)
+                else None
+            )
+
+        # 更新主窗口用户名
+        if self.parent_manager and hasattr(self.parent_manager, "username_btn"):
+            new_name = self.name_input.text().strip()
+            if new_name:
+                self.parent_manager.username_btn.setText(new_name)
 
         if self.parent_manager:
             self.parent_manager.log_message("个人中心配置已保存")
