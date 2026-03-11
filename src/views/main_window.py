@@ -52,6 +52,7 @@ from src.services import (
 )
 from src.components import AvatarButton
 from src.utils.podfile_reader import PodfileReader
+from src.styles.glassmorphism import GlassmorphismStyle, Styles, Colors
 
 
 class RemoteTagLoader(QThread):
@@ -110,86 +111,86 @@ class PodPilot(QMainWindow):
         if custom_avatar and os.path.exists(custom_avatar):
             self.avatar_btn.set_avatar_path(custom_avatar)
 
-    def showEvent(self, a0):
-        print("[DEBUG] === Layout Debug Info ===")
-        print(f"MainWindow size: {self.width()}x{self.height()}")
-
-        if hasattr(self, "top_bar"):
-            tb = self.top_bar
-            print(f"top_bar size: {tb.width()}x{tb.height()}")
-            print(
-                f"top_bar geometry: {tb.geometry().x()}, {tb.geometry().y()} {tb.geometry().width()}x{tb.geometry().height()}"
-            )
-
-        if hasattr(self, "avatar_btn"):
-            ab = self.avatar_btn
-            print(f"avatar_btn size: {ab.width()}x{ab.height()}")
-            print(f"avatar_btn pos: {ab.pos().x()}, {ab.pos().y()}")
-            print(
-                f"avatar_btn geometry: {ab.geometry().x()}, {ab.geometry().y()} {ab.geometry().width()}x{ab.geometry().height()}"
-            )
-
-        cw = self.centralWidget()
-        if cw:
-            print(
-                f"central_widget geometry: {cw.geometry().x()}, {cw.geometry().y()} {cw.geometry().width()}x{cw.geometry().height()}"
-            )
-        print("[DEBUG] ========================")
-
     def initUI(self):
-        self.setWindowTitle("🚀 PodPilot")
+        self.setWindowTitle("PodPilot")
         self.setGeometry(100, 100, 1200, 750)
+
+        # macOS 透明标题栏，让渐变背景延伸到标题栏下方
+        self._setup_transparent_titlebar()
 
         # 创建中央widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # 主布局
+        # 主布局 - 增加顶部边距给标题栏留空间
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setContentsMargins(16, 48, 16, 16)
         main_layout.setSpacing(12)
 
-        # 创建顶部栏（用于放置个人中心）
+        # 顶部栏 - Glassmorphism 卡片样式
         top_bar = QWidget()
-        top_bar.setFixedHeight(70)
+        top_bar.setFixedHeight(56)
+        top_bar.setStyleSheet(
+            "background: rgba(255, 255, 255, 0.15); "
+            "border: 1px solid rgba(255, 255, 255, 0.2); "
+            "border-radius: 12px;"
+        )
         top_bar_layout = QHBoxLayout(top_bar)
+        top_bar_layout.setContentsMargins(16, 10, 16, 10)
+        top_bar_layout.setSpacing(12)
 
-        top_bar_layout.setContentsMargins(0, 0, 0, 0)
-        top_bar_layout.setSpacing(8)
+        # 左侧：Logo + 应用名称
+        left_section = QWidget()
+        left_section.setStyleSheet("background: transparent; border: none;")
+        left_layout = QHBoxLayout(left_section)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(12)
 
-        # 左侧占位
+        # Logo
+        logo_label = QLabel("P")
+        logo_label.setFixedSize(32, 32)
+        logo_label.setStyleSheet(
+            "background: rgba(255, 255, 255, 0.25); "
+            "border-radius: 8px; "
+            "color: white; font-weight: bold; font-size: 14px;"
+        )
+        logo_label.setAlignment(Qt.AlignCenter)
+        left_layout.addWidget(logo_label)
+
+        # 应用名称
+        app_name = QLabel("PodPilot")
+        app_name.setStyleSheet(
+            "color: white; font-weight: 600; font-size: 15px; "
+            "background: transparent; border: none;"
+        )
+        left_layout.addWidget(app_name)
+
+        top_bar_layout.addWidget(left_section)
         top_bar_layout.addStretch()
 
-        # 右侧个人中心
-        right_corner_layout = QHBoxLayout()
-        right_corner_layout.setContentsMargins(0, 0, 0, 0)
-        right_corner_layout.setSpacing(8)
+        # 右侧：头像 + 用户名
+        right_section = QWidget()
+        right_section.setStyleSheet("background: transparent; border: none;")
+        right_layout = QHBoxLayout(right_section)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(8)
 
         self.avatar_btn = AvatarButton()
         self.avatar_btn.clicked.connect(self.toggle_personal_drawer)
-        right_corner_layout.addWidget(self.avatar_btn, 0, Qt.AlignVCenter)
+        right_layout.addWidget(self.avatar_btn, 0, Qt.AlignVCenter)
 
         username = GitService.get_username()
         self.username_btn = QPushButton(username)
         self.username_btn.setCursor(Qt.PointingHandCursor)
-        self.username_btn.setFixedHeight(36)
-        self.username_btn.setStyleSheet("""
-            QPushButton {
-                    border: none;
-                    font-size: 14px;
-                    color: #333;
-                    font-weight: 500;
-                    background: transparent;
-                    padding: 6px 4px;
-                }
-            QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.05);
-            }
-        """)
         self.username_btn.clicked.connect(self.toggle_personal_drawer)
-        right_corner_layout.addWidget(self.username_btn, 0, Qt.AlignVCenter)
+        self.username_btn.setStyleSheet(
+            "background: transparent; border: none; "
+            "color: rgba(255, 255, 255, 0.8); font-size: 13px; "
+            "padding: 4px 8px;"
+        )
+        right_layout.addWidget(self.username_btn, 0, Qt.AlignVCenter)
 
-        top_bar_layout.addLayout(right_corner_layout)
+        top_bar_layout.addWidget(right_section)
         main_layout.addWidget(top_bar)
 
         # 创建分割器
@@ -206,14 +207,14 @@ class PodPilot(QMainWindow):
         left_layout.addWidget(QLabel("项目列表:"))
         self.project_list = QListWidget()
         self.project_list.itemClicked.connect(self.on_project_selected)
-        left_layout.addWidget(self.project_list)
+        left_layout.addWidget(self.project_list, 1)
 
         # 项目操作按钮 - 第一行：添加/移除 + 一键操作
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(6)
 
         # 统一按钮高度
-        left_btn_h = 28
+        left_btn_h = 32
 
         self.add_btn = QPushButton("添加项目")
         self.add_btn.setFixedHeight(left_btn_h)
@@ -228,63 +229,36 @@ class PodPilot(QMainWindow):
         left_separator = QFrame()
         left_separator.setFrameShape(QFrame.VLine)
         left_separator.setFrameShadow(QFrame.Sunken)
-        left_separator.setStyleSheet("color: #d1d1d6;")
+        left_separator.setStyleSheet("color: rgba(255, 255, 255, 0.3);")
         left_separator.setFixedHeight(20)
         btn_layout.addWidget(left_separator)
 
-        # 一键操作按钮组 - 统一宽度
+        # 一键操作按钮组 - 统一宽度，使用 Glassmorphism 样式
         one_click_btn_w = 120
-        one_click_btn_style_green = """
-            QPushButton {
-                background-color: #34c759;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QPushButton:hover { background-color: #2db84d; }
-            QPushButton:disabled { background-color: #e0e0e0; color: #a0a0a0; }
-        """
-        one_click_btn_style_blue = """
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QPushButton:hover { background-color: #0051d5; }
-            QPushButton:disabled { background-color: #e0e0e0; color: #a0a0a0; }
-        """
 
-        self.one_click_tag_btn = QPushButton("🔖 一键Tag", left_widget)
+        self.one_click_tag_btn = QPushButton("一键Tag", left_widget)
         self.one_click_tag_btn.setToolTip(
             "自动筛选branch/git引用的Pod，批量切换到Tag引用"
         )
         self.one_click_tag_btn.setFixedSize(one_click_btn_w, left_btn_h)
-        self.one_click_tag_btn.setStyleSheet(one_click_btn_style_green)
         self.one_click_tag_btn.clicked.connect(self.one_click_tag_mode)
         self.one_click_tag_btn.setEnabled(False)
         btn_layout.addWidget(self.one_click_tag_btn)
 
-        self.one_click_branch_btn = QPushButton("🔀 一键Branch", left_widget)
+        self.one_click_branch_btn = QPushButton("一键Branch", left_widget)
         self.one_click_branch_btn.setToolTip(
             "自动筛选tag引用的Pod，批量切换到Branch模式"
         )
         self.one_click_branch_btn.setFixedSize(one_click_btn_w, left_btn_h)
-        self.one_click_branch_btn.setStyleSheet(one_click_btn_style_blue)
         self.one_click_branch_btn.clicked.connect(self.one_click_branch_mode)
         self.one_click_branch_btn.setEnabled(False)
         btn_layout.addWidget(self.one_click_branch_btn)
 
-        self.one_click_mr_btn = QPushButton("🔄 一键MR", left_widget)
+        self.one_click_mr_btn = QPushButton("一键MR", left_widget)
         self.one_click_mr_btn.setToolTip(
             "自动筛选branch/git引用的Pod，批量创建Merge Request"
         )
         self.one_click_mr_btn.setFixedSize(one_click_btn_w, left_btn_h)
-        self.one_click_mr_btn.setStyleSheet(one_click_btn_style_blue)
         self.one_click_mr_btn.clicked.connect(self.one_click_mr_mode)
         self.one_click_mr_btn.setEnabled(False)
         btn_layout.addWidget(self.one_click_mr_btn)
@@ -293,27 +267,9 @@ class PodPilot(QMainWindow):
         left_layout.addLayout(btn_layout)
 
         # 第二行：查看工程MR
-        self.view_project_mr_btn = QPushButton("📋 查看工程MR", left_widget)
+        self.view_project_mr_btn = QPushButton("查看工程MR", left_widget)
         self.view_project_mr_btn.setToolTip("查看当前工程及其关联Pod的待合并MR")
         self.view_project_mr_btn.setFixedHeight(left_btn_h)
-        self.view_project_mr_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #5856d6;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #4240a8;
-            }
-            QPushButton:disabled {
-                background-color: #e0e0e0;
-                color: #a0a0a0;
-            }
-        """)
         self.view_project_mr_btn.clicked.connect(self.show_project_mrs)
         self.view_project_mr_btn.setEnabled(False)
         left_layout.addWidget(self.view_project_mr_btn)
@@ -342,35 +298,47 @@ class PodPilot(QMainWindow):
         self.pod_list.setIconSize(QSize(34, 16))
         self.pod_list.itemDoubleClicked.connect(self.configure_pod)
         self.pod_list.itemSelectionChanged.connect(self.update_mode_buttons_state)
-        right_layout.addWidget(self.pod_list)
+        self.pod_list.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 12px;
+                padding: 8px;
+                outline: none;
+            }
+            QListWidget::item {
+                background-color: rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                padding: 0;
+                margin: 2px 4px;
+            }
+            QListWidget::item:hover:!selected {
+                background-color: rgba(255, 255, 255, 0.15);
+            }
+            QListWidget::item:selected {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+        """)
+        right_layout.addWidget(self.pod_list, 1)
 
         # Pod操作按钮 - 使用分段控制器布局
         # 独立功能按钮 + 分隔符 + 模式切换Segmented Control
         pod_btn_layout = QHBoxLayout()
         pod_btn_layout.setSpacing(6)
 
-        # 独立功能按钮 - 统一固定宽度
-        action_btn_style = """
-            QPushButton {
-                font-size: 12px;
-            }
-        """
+        # 统一按钮高度
+        right_btn_h = 32
+
         self.config_pod_btn = QPushButton("配置")
-        self.config_pod_btn.setProperty("buttonType", "primary")
-        self.config_pod_btn.setFixedSize(80, 28)
-        self.config_pod_btn.setStyleSheet(action_btn_style)
+        self.config_pod_btn.setFixedSize(80, right_btn_h)
         self.config_pod_btn.clicked.connect(self.configure_selected_pod)
 
         self.create_tag_btn = QPushButton("创建Tag")
-        self.create_tag_btn.setProperty("buttonType", "info")
-        self.create_tag_btn.setFixedSize(80, 28)
-        self.create_tag_btn.setStyleSheet(action_btn_style)
+        self.create_tag_btn.setFixedSize(80, right_btn_h)
         self.create_tag_btn.clicked.connect(self.create_tag_for_pod)
 
         self.clean_cache_btn = QPushButton("清理缓存")
-        self.clean_cache_btn.setProperty("buttonType", "warning")
-        self.clean_cache_btn.setFixedSize(80, 28)
-        self.clean_cache_btn.setStyleSheet(action_btn_style)
+        self.clean_cache_btn.setFixedSize(80, right_btn_h)
         self.clean_cache_btn.clicked.connect(self.clean_pod_cache)
 
         pod_btn_layout.addWidget(self.config_pod_btn)
@@ -381,7 +349,7 @@ class PodPilot(QMainWindow):
         separator1 = QFrame()
         separator1.setFrameShape(QFrame.VLine)
         separator1.setFrameShadow(QFrame.Sunken)
-        separator1.setStyleSheet("color: #d1d1d6;")
+        separator1.setStyleSheet("color: rgba(255, 255, 255, 0.3);")
         separator1.setFixedHeight(20)
         pod_btn_layout.addWidget(separator1)
 
@@ -393,81 +361,24 @@ class PodPilot(QMainWindow):
         segment_container = QHBoxLayout()
         segment_container.setSpacing(0)
 
-        segment_first_style = """
-            QPushButton {
-                background-color: #f5f5f7;
-                border: 1px solid #c7c7cc;
-                border-top-left-radius: 6px;
-                border-bottom-left-radius: 6px;
-                border-top-right-radius: 0px;
-                border-bottom-right-radius: 0px;
-                padding: 4px 14px;
-                font-size: 12px;
-                color: #1d1d1f;
-            }
-            QPushButton:hover { background-color: #e8e8ed; }
-            QPushButton:checked {
-                background-color: #007aff;
-                border-color: #007aff;
-                color: white;
-            }
-        """
-        segment_middle_style = """
-            QPushButton {
-                background-color: #f5f5f7;
-                border: 1px solid #c7c7cc;
-                border-left: none;
-                border-radius: 0px;
-                padding: 4px 14px;
-                font-size: 12px;
-                color: #1d1d1f;
-            }
-            QPushButton:hover { background-color: #e8e8ed; }
-            QPushButton:checked {
-                background-color: #007aff;
-                border-color: #007aff;
-                color: white;
-            }
-        """
-        segment_last_style = """
-            QPushButton {
-                background-color: #f5f5f7;
-                border: 1px solid #c7c7cc;
-                border-left: none;
-                border-top-left-radius: 0px;
-                border-bottom-left-radius: 0px;
-                border-top-right-radius: 6px;
-                border-bottom-right-radius: 6px;
-                padding: 4px 14px;
-                font-size: 12px;
-                color: #1d1d1f;
-            }
-            QPushButton:hover { background-color: #e8e8ed; }
-            QPushButton:checked {
-                background-color: #007aff;
-                border-color: #007aff;
-                color: white;
-            }
-        """
-
         self.to_dev_btn = QPushButton("开发模式")
         self.to_dev_btn.setCheckable(True)
-        self.to_dev_btn.setFixedHeight(28)
-        self.to_dev_btn.setStyleSheet(segment_first_style)
+        self.to_dev_btn.setFixedHeight(right_btn_h)
+        self.to_dev_btn.setStyleSheet(Styles.SEGMENT_FIRST)
         self.to_dev_btn.clicked.connect(self.switch_to_dev_mode)
         self.mode_btn_group.addButton(self.to_dev_btn)
 
         self.to_branch_btn = QPushButton("Branch模式")
         self.to_branch_btn.setCheckable(True)
-        self.to_branch_btn.setFixedHeight(28)
-        self.to_branch_btn.setStyleSheet(segment_middle_style)
+        self.to_branch_btn.setFixedHeight(right_btn_h)
+        self.to_branch_btn.setStyleSheet(Styles.SEGMENT_MIDDLE)
         self.to_branch_btn.clicked.connect(self.switch_to_branch_mode)
         self.mode_btn_group.addButton(self.to_branch_btn)
 
         self.to_tag_btn = QPushButton("Tag模式")
         self.to_tag_btn.setCheckable(True)
-        self.to_tag_btn.setFixedHeight(28)
-        self.to_tag_btn.setStyleSheet(segment_last_style)
+        self.to_tag_btn.setFixedHeight(right_btn_h)
+        self.to_tag_btn.setStyleSheet(Styles.SEGMENT_LAST)
         self.to_tag_btn.clicked.connect(self.switch_to_tag_mode)
         self.mode_btn_group.addButton(self.to_tag_btn)
 
@@ -478,30 +389,15 @@ class PodPilot(QMainWindow):
 
         # 分隔符
         separator = QLabel("|")
-        separator.setStyleSheet("color: #c7c7cc; font-size: 14px; margin: 0 8px;")
+        separator.setStyleSheet(
+            "color: rgba(255, 255, 255, 0.3); font-size: 14px; margin: 0 8px;"
+        )
         pod_btn_layout.addWidget(separator)
 
         # 退出开发按钮 - 独立按钮
         self.exit_dev_btn = QPushButton("退出开发")
-        self.exit_dev_btn.setFixedHeight(28)
+        self.exit_dev_btn.setFixedHeight(right_btn_h)
         self.exit_dev_btn.setFixedWidth(90)
-        self.exit_dev_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ff9500;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #e68600;
-            }
-            QPushButton:disabled {
-                background-color: #e0e0e0;
-                color: #a0a0a0;
-            }
-        """)
         self.exit_dev_btn.clicked.connect(self.exit_dev_mode)
         self.exit_dev_btn.setEnabled(False)
         pod_btn_layout.addWidget(self.exit_dev_btn)
@@ -591,23 +487,11 @@ class PodPilot(QMainWindow):
             )
 
     def get_pod_name_from_item(self, item):
-        return PodService.get_pod_name_from_text(item.text())
+        return item.data(Qt.UserRole) or ""
 
     def _get_pod_mode_from_item(self, item):
-        text = item.text()
-
-        if "(开发模式)" in text:
-            return "dev"
-        elif "(分支)" in text:
-            return "branch"
-        elif "(标签)" in text:
-            return "tag"
-        elif "(Git)" in text:
-            return "git"
-        else:
-            # "已配置" 或普通模式都返回 "normal"
-            # 它们没有特殊引用，只是配置了本地路径
-            return "normal"
+        mode = item.data(Qt.UserRole + 1)
+        return mode if mode else "normal"
 
     def update_mode_buttons_state(self):
         selected_items = self.pod_list.selectedItems()
@@ -665,129 +549,43 @@ class PodPilot(QMainWindow):
                 self.current_project, pod_name, local_path
             )
 
+    def _setup_transparent_titlebar(self):
+        """设置 macOS 透明标题栏"""
+        import sys
+
+        if sys.platform != "darwin":
+            return
+
+        try:
+            from AppKit import (
+                NSWindow,
+                NSFullSizeContentViewWindowMask,
+                NSWindowTitleHidden,
+            )
+            from ctypes import c_void_p
+
+            # 获取 NSWindow
+            ns_view = self.winId()
+
+            # 使用 objc 获取窗口
+            import objc
+
+            ns_window = objc.objc_object(c_void_p=int(ns_view))
+
+            # 从 NSView 获取 NSWindow
+            ns_window = ns_window.window()
+
+            # 设置透明标题栏
+            style_mask = ns_window.styleMask()
+            ns_window.setStyleMask_(style_mask | NSFullSizeContentViewWindowMask)
+            ns_window.setTitlebarAppearsTransparent_(True)
+            ns_window.setTitleVisibility_(NSWindowTitleHidden)
+        except Exception as e:
+            print(f"透明标题栏设置失败: {e}")
+
     def set_modern_style(self):
-        """设置现代化UI样式"""
-        style_sheet = """
-        QMainWindow {
-            background-color: #f5f5f7;
-        }
-        QWidget {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            font-size: 13px;
-            color: #1d1d1f;
-        }
-        QPushButton {
-            background-color: #007aff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 400;
-            min-height: 24px;
-            max-height: 24px;
-        }
-        QPushButton:hover {
-            background-color: #0051d5;
-        }
-        QPushButton:pressed {
-            background-color: #0042a5;
-        }
-        QPushButton[buttonType="primary"] {
-            background-color: #007aff;
-        }
-        QPushButton[buttonType="primary"]:hover {
-            background-color: #0051d5;
-        }
-        QPushButton[buttonType="success"] {
-            background-color: #34c759;
-        }
-        QPushButton[buttonType="success"]:hover {
-            background-color: #30b150;
-        }
-        QPushButton[buttonType="warning"] {
-            background-color: #ff9500;
-        }
-        QPushButton[buttonType="warning"]:hover {
-            background-color: #e68600;
-        }
-        QPushButton[buttonType="info"] {
-            background-color: #5856d6;
-        }
-        QPushButton[buttonType="info"]:hover {
-            background-color: #4a48b8;
-        }
-        QListWidget {
-            background-color: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 8px;
-            outline: none;
-        }
-        QListWidget::item {
-            padding: 8px 12px;
-            border-radius: 6px;
-            margin: 2px 0;
-        }
-        QListWidget::item:hover:!selected {
-            background-color: #e8e8ed;
-        }
-        QListWidget::item:selected {
-            background-color: #007aff;
-            color: white;
-            border-radius: 6px;
-        }
-        QLabel {
-            color: #86868b;
-            font-size: 12px;
-            font-weight: 600;
-            padding: 4px 0;
-        }
-        QStatusBar {
-            background-color: #e8e8ed;
-            color: #1d1d1f;
-            font-size: 11px;
-        }
-        QSplitter::handle {
-            background-color: #d1d1d6;
-            width: 1px;
-        }
-        QGroupBox {
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            margin-top: 12px;
-            padding-top: 12px;
-            font-weight: 600;
-            background-color: white;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 12px;
-            padding: 0 4px;
-            color: #1d1d1f;
-        }
-        QLineEdit {
-            border: 1px solid #d1d1d6;
-            border-radius: 6px;
-            padding: 6px 12px;
-            background-color: white;
-            min-height: 28px;
-            font-size: 12px;
-        }
-        QLineEdit:focus {
-            border: 2px solid #007aff;
-        }
-        QLineEdit::placeholder {
-            color: #a1a1a6;
-        }
-        QTextEdit {
-            border: 1px solid #d1d1d6;
-            border-radius: 6px;
-            padding: 8px;
-            background-color: white;
-        }
-        """
-        self.setStyleSheet(style_sheet)
+        """设置现代化UI样式 - Glassmorphism 风格"""
+        self.setStyleSheet(GlassmorphismStyle.get_full_stylesheet())
 
     def closeEvent(self, event):
         """当窗口关闭时保存配置并处理线程"""
@@ -879,6 +677,7 @@ class PodPilot(QMainWindow):
         self.load_pods(project_dir)
 
         self.one_click_tag_btn.setEnabled(True)
+        self.one_click_branch_btn.setEnabled(True)
         self.one_click_mr_btn.setEnabled(True)
         self.view_project_mr_btn.setEnabled(True)
 
@@ -1021,54 +820,92 @@ class PodPilot(QMainWindow):
 
         pod_list_with_priority.sort(key=lambda x: (x[1], pods.index(x[0])))
 
+        badge_map = {
+            1: ("DEV", Colors.DEV),
+            2: ("BRANCH", Colors.BRANCH),
+            3: ("TAG", Colors.TAG),
+            4: ("GIT", Colors.GIT),
+        }
+
         for pod, priority in pod_list_with_priority:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, pod)
 
             is_configured = pod in current_project_config
-
-            if priority == 1:
-                # 开发模式
-                icon = self._build_pod_icon(
-                    "ic_develop_mode", is_configured, 16, 2, "#34c759"
+            mode = (
+                "dev"
+                if priority == 1
+                else (
+                    "branch"
+                    if priority == 2
+                    else (
+                        "tag"
+                        if priority == 3
+                        else ("git" if priority == 4 else "normal")
+                    )
                 )
-                if icon:
-                    item.setIcon(icon)
-                item.setText(f"{pod} (开发模式)")
-                item.setForeground(QColor("#34c759"))
-            elif priority == 2:
-                # 分支模式
-                icon = self._build_pod_icon("branch", is_configured, 16, 2, "#ff9500")
-                if icon:
-                    item.setIcon(icon)
-                item.setText(f"{pod} (分支)")
-                item.setForeground(QColor("#ff9500"))
-            elif priority == 3:
-                # 标签模式
-                icon = self._build_pod_icon("tag_fill", is_configured, 16, 2, "#007aff")
-                if icon:
-                    item.setIcon(icon)
-                item.setText(f"{pod} (标签)")
-                item.setForeground(QColor("#007aff"))
-            elif priority == 4:
-                # Git 模式
-                icon = self._build_pod_icon("package", is_configured, 16, 2, "#8e8e93")
-                if icon:
-                    item.setIcon(icon)
-                item.setText(f"{pod} (Git)")
-                item.setForeground(QColor("#8e8e93"))
-            else:
-                # 普通模式
-                icon = self._build_pod_icon(None, is_configured, 16, 0, "#8e8e93")
-                if icon:
-                    item.setIcon(icon)
-                if is_configured:
-                    item.setText(f"{pod} (已配置)")
-                else:
-                    item.setText(f"{pod}")
-                item.setForeground(QColor("#8e8e93"))
+            )
+            item.setData(Qt.UserRole + 1, mode)
 
+            row_widget = QWidget()
+            row_widget.setStyleSheet("background: transparent; border: none;")
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(12, 8, 12, 8)
+            row_layout.setSpacing(8)
+
+            if is_configured:
+                icon_path = self._get_icon_path("configed")
+                if os.path.exists(icon_path):
+                    renderer = QSvgRenderer(icon_path)
+                    if renderer.isValid():
+                        default_size = renderer.defaultSize()
+                        pixmap = QPixmap(default_size)
+                        pixmap.fill(Qt.transparent)
+                        painter = QPainter(pixmap)
+                        renderer.render(painter)
+                        painter.end()
+                        icon_label = QLabel()
+                        icon_label.setPixmap(
+                            pixmap.scaled(
+                                16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                            )
+                        )
+                        icon_label.setStyleSheet(
+                            "background: transparent; border: none; padding: 0; margin: 0; opacity: 0.7;"
+                        )
+                        row_layout.addWidget(icon_label)
+
+            name_label = QLabel(pod)
+            name_label.setStyleSheet(
+                f"color: {Colors.TEXT_PRIMARY}; font-size: 13px; "
+                "background: transparent; border: none; padding: 0;"
+            )
+            row_layout.addWidget(name_label)
+
+            row_layout.addStretch()
+
+            badge_info = badge_map.get(priority)
+            if badge_info:
+                badge_text, badge_color = badge_info
+                r, g, b = (
+                    int(badge_color[1:3], 16),
+                    int(badge_color[3:5], 16),
+                    int(badge_color[5:7], 16),
+                )
+                badge = QLabel(badge_text)
+                badge.setFixedHeight(18)
+                badge.setStyleSheet(
+                    f"background-color: rgba({r}, {g}, {b}, 0.4); "
+                    f"color: white; "
+                    "padding: 0px 8px; border-radius: 4px; "
+                    "font-size: 11px; font-weight: 500; border: none;"
+                )
+                row_layout.addWidget(badge, 0, Qt.AlignVCenter)
+
+            # 设置 item 高度
+            item.setSizeHint(QSize(0, 36))
             self.pod_list.addItem(item)
+            self.pod_list.setItemWidget(item, row_widget)
 
         self.log_message(f"已加载 {len(pods)} 个Pod")
         self.update_mode_buttons_state()

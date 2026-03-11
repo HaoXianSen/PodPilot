@@ -30,6 +30,8 @@ from PyQt5.QtCore import (
     pyqtSignal,
 )
 from src.views.dialogs.my_mr_dialog import MyMRDialog
+from src.styles import Colors, Styles
+from src.resources.icons import IconManager
 
 
 class ClickableAvatar(QWidget):
@@ -71,11 +73,11 @@ class ClickableAvatar(QWidget):
             painter.setClipPath(clip_path)
             painter.drawPixmap(0, 0, scaled)
         else:
-            painter.setBrush(QBrush(QColor("#007aff")))
+            painter.setBrush(QBrush(QColor(Colors.BRANCH)))
             painter.setPen(QPen(QColor("transparent")))
             painter.drawEllipse(0, 0, w, h)
 
-            painter.setBrush(QBrush(QColor("white")))
+            painter.setBrush(QBrush(QColor(Colors.TEXT_PRIMARY)))
             head_w = int(w * 0.3)
             head_h = int(h * 0.3)
             head_x = (w - head_w) // 2
@@ -95,7 +97,7 @@ class ClickableAvatar(QWidget):
             painter.setPen(QPen(QColor("transparent")))
             painter.drawEllipse(0, 0, w, h)
 
-            painter.setPen(QPen(QColor("white")))
+            painter.setPen(QPen(QColor(Colors.TEXT_PRIMARY)))
             font = painter.font()
             font.setPointSize(10)
             painter.setFont(font)
@@ -234,16 +236,16 @@ class PersonalCenterDrawer(QWidget):
         if self.parent_manager:
             self.setFixedHeight(self.parent_manager.height())
 
-        # 主容器
+        # 主容器 - Glassmorphism 风格
         container = QFrame()
         container.setObjectName("drawerContainer")
-        container.setStyleSheet("""
-            QFrame#drawerContainer {
-                background-color: #f5f5f7;
+        container.setStyleSheet(f"""
+            QFrame#drawerContainer {{
+                background-color: rgba(30, 30, 40, 0.85);
                 border-top-left-radius: 12px;
                 border-bottom-left-radius: 12px;
-                border: 1px solid #d1d1d6;
-            }
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }}
         """)
 
         container_layout = QVBoxLayout(container)
@@ -258,7 +260,7 @@ class PersonalCenterDrawer(QWidget):
         scroll_content = QWidget()
         scroll_content.setObjectName("scrollContent")
         scroll_content.setStyleSheet(
-            "QWidget#scrollContent { background-color: #f5f5f7; }"
+            "QWidget#scrollContent { background-color: transparent; }"
         )
 
         layout = QVBoxLayout(scroll_content)
@@ -277,7 +279,7 @@ class PersonalCenterDrawer(QWidget):
         layout.addStretch()
 
         scroll_area.setWidget(scroll_content)
-        container_layout.addWidget(scroll_area)
+        container_layout.addWidget(scroll_area, 1)  # 添加 stretch factor
 
         # 主布局
         self.main_layout = QVBoxLayout(self)
@@ -291,7 +293,7 @@ class PersonalCenterDrawer(QWidget):
         title_bar.setFixedHeight(56)
         title_bar.setStyleSheet("""
             QFrame#titleBar {
-                background-color: #f5f5f7;
+                background-color: transparent;
                 border: none;
                 border-top-left-radius: 12px;
             }
@@ -302,37 +304,35 @@ class PersonalCenterDrawer(QWidget):
         title_layout.setSpacing(0)
 
         title_label = QLabel("个人中心")
-        title_label.setStyleSheet("""
-            QLabel {
+        title_label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 16px;
                 font-weight: 700;
-                color: #1d1d1f;
+                color: {Colors.TEXT_PRIMARY};
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
         title_layout.addWidget(title_label)
         title_layout.addStretch()
 
-        close_btn = QPushButton("✕")
+        close_btn = QPushButton()
         close_btn.setFixedSize(28, 28)
         close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(0, 0, 0, 0.06);
+        IconManager.clear_cache()
+        close_btn.setIcon(IconManager.get_icon("x", 14, "#FFFFFF"))
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 0.1);
                 border: none;
                 border-radius: 14px;
-                font-size: 13px;
-                color: #86868b;
-                font-weight: 500;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.1);
-                color: #1d1d1f;
-            }
-            QPushButton:pressed {
-                background-color: rgba(0, 0, 0, 0.15);
-            }
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 0.2);
+            }}
+            QPushButton:pressed {{
+                background-color: rgba(255, 255, 255, 0.15);
+            }}
         """)
         close_btn.clicked.connect(self.slide_out)
         title_layout.addWidget(close_btn)
@@ -345,31 +345,12 @@ class PersonalCenterDrawer(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background-color: #f5f5f7;
+        scroll_area.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: transparent;
                 border: none;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: transparent;
-                width: 6px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(0, 0, 0, 0.15);
-                min-height: 20px;
-                border-radius: 3px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: rgba(0, 0, 0, 0.25);
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
+            }}
+            {Styles.SCROLL_BAR}
         """)
         return scroll_area
 
@@ -377,17 +358,17 @@ class PersonalCenterDrawer(QWidget):
         """构建头像卡片: 居中大头像 + 用户名"""
         card = QFrame()
         card.setObjectName("avatarCard")
-        card.setStyleSheet("""
-            QFrame#avatarCard {
-                background-color: white;
+        card.setStyleSheet(f"""
+            QFrame#avatarCard {{
+                background-color: {Colors.SURFACE};
                 border-radius: 10px;
-                border: 1px solid #e5e5ea;
-            }
+                border: 1px solid {Colors.SURFACE_BORDER};
+            }}
         """)
 
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 24, 20, 20)
-        card_layout.setSpacing(8)
+        card_layout.setContentsMargins(20, 24, 20, 24)
+        card_layout.setSpacing(12)
 
         # 头像居中
         self.avatar_widget = ClickableAvatar(size=80)
@@ -405,40 +386,53 @@ class PersonalCenterDrawer(QWidget):
         self.name_input.setFixedHeight(32)
         self.name_input.setFixedWidth(200)
         self.name_input.setAlignment(Qt.AlignCenter)
-        self.name_input.setStyleSheet("""
-            QLineEdit {
+        self.name_input.setStyleSheet(f"""
+            QLineEdit {{
                 font-size: 16px;
                 font-weight: 600;
-                color: #1d1d1f;
+                color: {Colors.TEXT_PRIMARY};
                 border: 1px solid transparent;
                 padding: 4px 8px;
                 border-radius: 6px;
                 background: transparent;
-            }
-            QLineEdit:hover {
-                border: 1px solid #d1d1d6;
-                background: rgba(0, 0, 0, 0.02);
-            }
-            QLineEdit:focus {
-                border: 1px solid #007aff;
-                background: white;
-            }
+            }}
+            QLineEdit:hover {{
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(255, 255, 255, 0.05);
+            }}
+            QLineEdit:focus {{
+                border: 1px solid rgba(102, 126, 234, 0.6);
+                background: rgba(255, 255, 255, 0.08);
+            }}
         """)
         self.name_input.editingFinished.connect(self._auto_save)
         card_layout.addWidget(self.name_input, 0, Qt.AlignHCenter)
 
-        # 提示文字居中（在名字下方）
-        help_label = QLabel("ⓘ 修改名字将同步到 Git 本地配置")
-        help_label.setStyleSheet("""
-            QLabel {
+        # 提示文字居中（在名字下方）- 带 info 图标
+        help_row = QWidget()
+        help_row.setStyleSheet("background: transparent; border: none;")
+        help_layout = QHBoxLayout(help_row)
+        help_layout.setContentsMargins(0, 0, 0, 0)
+        help_layout.setSpacing(4)
+
+        info_icon_label = QLabel()
+        info_icon_label.setPixmap(IconManager.get_pixmap("info", 12, Colors.TEXT_MUTED))
+        info_icon_label.setStyleSheet("background: transparent; border: none;")
+        help_layout.addWidget(info_icon_label)
+
+        help_text = QLabel("修改名字将同步到 Git 本地配置")
+        help_text.setStyleSheet(f"""
+            QLabel {{
                 font-size: 11px;
-                color: #aeaeb2;
+                color: {Colors.TEXT_MUTED};
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
-        help_label.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(help_label, 0, Qt.AlignHCenter)
+        help_layout.addWidget(help_text)
+        help_layout.addStretch()
+
+        card_layout.addWidget(help_row, 0, Qt.AlignHCenter)
 
         return card
 
@@ -446,12 +440,12 @@ class PersonalCenterDrawer(QWidget):
         """构建 Token 配置卡片"""
         card = QFrame()
         card.setObjectName("tokenCard")
-        card.setStyleSheet("""
-            QFrame#tokenCard {
-                background-color: white;
+        card.setStyleSheet(f"""
+            QFrame#tokenCard {{
+                background-color: {Colors.SURFACE};
                 border-radius: 10px;
-                border: 1px solid #e5e5ea;
-            }
+                border: 1px solid {Colors.SURFACE_BORDER};
+            }}
         """)
 
         card_layout = QVBoxLayout(card)
@@ -460,17 +454,17 @@ class PersonalCenterDrawer(QWidget):
 
         # 区域标题
         section_title = QLabel("访问令牌")
-        section_title.setStyleSheet("""
-            QLabel {
+        section_title.setStyleSheet(f"""
+            QLabel {{
                 font-size: 12px;
                 font-weight: 600;
-                color: #86868b;
+                color: {Colors.TEXT_LABEL};
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
                 background: transparent;
                 border: none;
                 padding-bottom: 8px;
-            }
+            }}
         """)
         card_layout.addWidget(section_title)
 
@@ -486,14 +480,14 @@ class PersonalCenterDrawer(QWidget):
 
         # 说明
         gitlab_help = QLabel("用于创建 Merge Request  ·  权限: api, read_repository")
-        gitlab_help.setStyleSheet("""
-            QLabel {
+        gitlab_help.setStyleSheet(f"""
+            QLabel {{
                 font-size: 11px;
-                color: #aeaeb2;
+                color: {Colors.TEXT_MUTED};
                 background: transparent;
                 border: none;
                 padding: 2px 0 12px 0;
-            }
+            }}
         """)
         gitlab_help.setWordWrap(True)
         card_layout.addWidget(gitlab_help)
@@ -513,14 +507,14 @@ class PersonalCenterDrawer(QWidget):
         )
 
         github_help = QLabel("用于创建 Pull Request  ·  权限: repo, read:user")
-        github_help.setStyleSheet("""
-            QLabel {
+        github_help.setStyleSheet(f"""
+            QLabel {{
                 font-size: 11px;
-                color: #aeaeb2;
+                color: {Colors.TEXT_MUTED};
                 background: transparent;
                 border: none;
                 padding: 2px 0 8px 0;
-            }
+            }}
         """)
         github_help.setWordWrap(True)
         card_layout.addWidget(github_help)
@@ -528,20 +522,20 @@ class PersonalCenterDrawer(QWidget):
         # 链接
         token_links = QLabel(
             "<a href='https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html' "
-            "style='color:#007aff; text-decoration:none;'>创建 GitLab Token</a>"
+            f"style='color:{Colors.BRANCH}; text-decoration:none;'>创建 GitLab Token</a>"
             "  ·  "
             "<a href='https://github.com/settings/tokens' "
-            "style='color:#007aff; text-decoration:none;'>创建 GitHub Token</a>"
+            f"style='color:{Colors.BRANCH}; text-decoration:none;'>创建 GitHub Token</a>"
         )
         token_links.setOpenExternalLinks(True)
-        token_links.setStyleSheet("""
-            QLabel {
+        token_links.setStyleSheet(f"""
+            QLabel {{
                 font-size: 11px;
-                color: #007aff;
+                color: {Colors.BRANCH};
                 background: transparent;
                 border: none;
                 padding: 4px 0 0 0;
-            }
+            }}
         """)
         card_layout.addWidget(token_links)
 
@@ -556,14 +550,14 @@ class PersonalCenterDrawer(QWidget):
         row_layout.setSpacing(6)
 
         label = QLabel(label_text)
-        label.setStyleSheet("""
-            QLabel {
+        label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 13px;
                 font-weight: 500;
-                color: #1d1d1f;
+                color: {Colors.TEXT_PRIMARY};
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
         row_layout.addWidget(label)
 
@@ -575,24 +569,24 @@ class PersonalCenterDrawer(QWidget):
         token_input = QLineEdit()
         token_input.setPlaceholderText(placeholder)
         token_input.setEchoMode(QLineEdit.Password)
-        token_input.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #d1d1d6;
+        token_input.setStyleSheet(f"""
+            QLineEdit {{
+                border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 8px;
                 padding: 7px 12px;
-                background-color: #fafafa;
+                background-color: rgba(255, 255, 255, 0.08);
                 font-size: 13px;
                 min-height: 20px;
-                color: #1d1d1f;
-            }
-            QLineEdit:focus {
-                border: 2px solid #007aff;
-                background-color: white;
+                color: {Colors.TEXT_PRIMARY};
+            }}
+            QLineEdit:focus {{
+                border: 2px solid rgba(102, 126, 234, 0.6);
+                background-color: rgba(255, 255, 255, 0.12);
                 padding: 6px 11px;
-            }
-            QLineEdit::placeholder {
-                color: #c7c7cc;
-            }
+            }}
+            QLineEdit::placeholder {{
+                color: rgba(255, 255, 255, 0.4);
+            }}
         """)
         if saved_value:
             token_input.setText(saved_value)
@@ -602,20 +596,21 @@ class PersonalCenterDrawer(QWidget):
         setattr(self, attr_name, token_input)
 
         toggle_btn = QPushButton("显示")
-        toggle_btn.setFixedSize(48, 34)
+        toggle_btn.setFixedSize(52, 34)
         toggle_btn.setCursor(Qt.PointingHandCursor)
-        toggle_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 1px solid #d1d1d6;
+        toggle_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 8px;
-                font-size: 11px;
-                color: #86868b;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.04);
-                color: #1d1d1f;
-            }
+                font-size: 12px;
+                color: {Colors.TEXT_SECONDARY};
+                padding: 0 8px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 0.15);
+                color: {Colors.TEXT_PRIMARY};
+            }}
         """)
         toggle_btn.clicked.connect(
             lambda checked, inp=token_input, btn=toggle_btn: self._toggle_password(
@@ -633,12 +628,12 @@ class PersonalCenterDrawer(QWidget):
         """构建细分割线"""
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("""
-            QFrame {
-                background-color: #e5e5ea;
+        line.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(255, 255, 255, 0.1);
                 border: none;
                 max-height: 1px;
-            }
+            }}
         """)
         line.setFixedHeight(1)
         return line
@@ -647,12 +642,12 @@ class PersonalCenterDrawer(QWidget):
         """构建 MR 入口卡片"""
         card = QFrame()
         card.setObjectName("mrCard")
-        card.setStyleSheet("""
-            QFrame#mrCard {
-                background-color: white;
+        card.setStyleSheet(f"""
+            QFrame#mrCard {{
+                background-color: {Colors.SURFACE};
                 border-radius: 10px;
-                border: 1px solid #e5e5ea;
-            }
+                border: 1px solid {Colors.SURFACE_BORDER};
+            }}
         """)
 
         card_layout = QVBoxLayout(card)
@@ -671,7 +666,7 @@ class PersonalCenterDrawer(QWidget):
                 border-radius: 10px;
             }
             QFrame#mrRow:hover {
-                background-color: rgba(0, 0, 0, 0.03);
+                background-color: rgba(255, 255, 255, 0.08);
             }
         """)
 
@@ -679,39 +674,39 @@ class PersonalCenterDrawer(QWidget):
         mr_layout.setContentsMargins(20, 0, 20, 0)
         mr_layout.setSpacing(8)
 
-        mr_icon = QLabel("⌥")
-        mr_icon.setStyleSheet("""
+        mr_icon_label = QLabel()
+        mr_icon_label.setPixmap(IconManager.get_pixmap("git-merge", 18, Colors.BRANCH))
+        mr_icon_label.setStyleSheet("""
             QLabel {
-                font-size: 16px;
-                color: #007aff;
                 background: transparent;
                 border: none;
             }
         """)
-        mr_layout.addWidget(mr_icon)
+        mr_layout.addWidget(mr_icon_label)
 
         mr_label = QLabel("查看我的 Merge Requests")
-        mr_label.setStyleSheet("""
-            QLabel {
+        mr_label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 14px;
-                color: #1d1d1f;
+                color: {Colors.TEXT_PRIMARY};
                 background: transparent;
                 border: none;
-            }
+            }}
         """)
         mr_layout.addWidget(mr_label)
         mr_layout.addStretch()
 
-        arrow = QLabel("›")
-        arrow.setStyleSheet("""
+        arrow_label = QLabel()
+        arrow_label.setPixmap(
+            IconManager.get_pixmap("chevron-right", 18, Colors.TEXT_MUTED)
+        )
+        arrow_label.setStyleSheet("""
             QLabel {
-                font-size: 18px;
-                color: #c7c7cc;
                 background: transparent;
                 border: none;
             }
         """)
-        mr_layout.addWidget(arrow)
+        mr_layout.addWidget(arrow_label)
 
         # 整行可点击
         mr_row.mousePressEvent = lambda e: self.show_my_mrs()

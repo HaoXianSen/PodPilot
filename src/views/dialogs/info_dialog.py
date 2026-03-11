@@ -8,16 +8,19 @@ from PyQt5.QtWidgets import (
     QGroupBox,
 )
 from PyQt5.QtCore import Qt
+from src.styles import Colors, Styles
+from src.resources.icons import IconManager
 
 
 class InfoDialog(QDialog):
-    """美化信息对话框"""
+    """美化信息对话框 - Glassmorphism 风格"""
 
     def __init__(self, title, message, details=None, dialog_type="info", parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumWidth(400)
         self.setMaximumWidth(600)
+        self._dialog_type = dialog_type
         self.initUI(message, details, dialog_type)
 
     def initUI(self, message, details, dialog_type):
@@ -26,18 +29,18 @@ class InfoDialog(QDialog):
 
         # 根据类型设置图标和颜色
         icons = {
-            "info": ("ℹ️", "#007aff"),
-            "warning": ("⚠️", "#ff9500"),
-            "error": ("❌", "#ff3b30"),
-            "success": ("✅", "#34c759"),
+            "info": ("info", Colors.BRANCH),
+            "warning": ("info", Colors.DEV),
+            "error": ("x", "#ff3b30"),
+            "success": ("tag", Colors.TAG),
         }
 
-        icon_emoji, icon_color = icons.get(dialog_type, icons["info"])
+        icon_name, icon_color = icons.get(dialog_type, icons["info"])
 
         # 消息区域
         message_layout = QHBoxLayout()
-        icon_label = QLabel(icon_emoji)
-        icon_label.setStyleSheet(f"font-size: 32px;")
+        icon_label = QLabel()
+        icon_label.setPixmap(IconManager.get_pixmap(icon_name, 32, icon_color))
         icon_label.setFixedSize(50, 50)
 
         message_label = QLabel(message)
@@ -45,7 +48,7 @@ class InfoDialog(QDialog):
         message_label.setStyleSheet(f"""
             font-size: 14px;
             font-weight: 500;
-            color: #1d1d1f;
+            color: {Colors.TEXT_PRIMARY};
             padding: 5px 0;
         """)
 
@@ -63,15 +66,16 @@ class InfoDialog(QDialog):
             details_text.setReadOnly(True)
             details_text.setMaximumHeight(150)
             details_text.setText(str(details))
-            details_text.setStyleSheet("""
-                QTextEdit {
-                    background-color: #f5f5f7;
-                    border: 1px solid #e0e0e0;
+            details_text.setStyleSheet(f"""
+                QTextEdit {{
+                    background-color: rgba(255, 255, 255, 0.08);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
                     border-radius: 6px;
                     padding: 8px;
                     font-family: monospace;
                     font-size: 12px;
-                }
+                    color: {Colors.TEXT_PRIMARY};
+                }}
             """)
 
             details_layout.addWidget(details_text)
@@ -102,28 +106,29 @@ class InfoDialog(QDialog):
 
         self.setLayout(layout)
 
-        # 应用样式
+        # 应用样式 - Glassmorphism 风格
         self.setStyleSheet(f"""
             QDialog {{
-                background-color: #f5f5f7;
+                background-color: rgba(30, 30, 40, 0.9);
+                border-radius: 12px;
             }}
             QGroupBox {{
-                border: 1px solid #e0e0e0;
+                border: 1px solid {Colors.SURFACE_BORDER};
                 border-radius: 8px;
                 margin-top: 12px;
                 padding-top: 8px;
                 font-weight: 600;
-                background-color: white;
+                background-color: {Colors.SURFACE};
             }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 12px;
                 padding: 0 4px;
-                color: #1d1d1f;
+                color: {Colors.TEXT_PRIMARY};
             }}
             QPushButton {{
-                background-color: #007aff;
-                color: white;
+                background-color: rgba(59, 130, 246, 0.5);
+                color: {Colors.TEXT_PRIMARY};
                 border: none;
                 border-radius: 6px;
                 padding: 8px 24px;
@@ -133,19 +138,20 @@ class InfoDialog(QDialog):
                 min-width: 80px;
             }}
             QPushButton:hover {{
-                background-color: #0051d5;
+                background-color: rgba(59, 130, 246, 0.6);
             }}
             QPushButton[type="primary"] {{
-                background-color: #007aff;
+                background-color: rgba(59, 130, 246, 0.5);
             }}
             QPushButton[type="primary"]:hover {{
-                background-color: #0051d5;
+                background-color: rgba(59, 130, 246, 0.6);
             }}
             QPushButton[type="cancel"] {{
-                background-color: #e8e8ed;
-                color: #1d1d1f;
+                background-color: rgba(255, 255, 255, 0.1);
+                color: {Colors.TEXT_PRIMARY};
+                border: 1px solid rgba(255, 255, 255, 0.2);
             }}
             QPushButton[type="cancel"]:hover {{
-                background-color: #d1d1d6;
+                background-color: rgba(255, 255, 255, 0.15);
             }}
         """)
