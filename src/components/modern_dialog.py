@@ -58,28 +58,16 @@ class ModernDialog(QDialog):
         self._init_ui()
         self._setup_animations()
 
+        # 设置固定宽度，高度自适应
+        self.setFixedWidth(380)
+        self.adjustSize()
+
         # 居中显示
         if parent:
             parent_rect = parent.geometry()
-            dialog_width = 400
-            dialog_height = self._calculate_height()
-            x = parent_rect.x() + (parent_rect.width() - dialog_width) // 2
-            y = parent_rect.y() + (parent_rect.height() - dialog_height) // 2
-            self.setGeometry(x, y, dialog_width, dialog_height)
-        else:
-            self.resize(400, self._calculate_height())
-
-    def _calculate_height(self):
-        """计算对话框高度"""
-        base_height = 160
-        message_lines = len(self._message.split("\n"))
-        if message_lines > 2:
-            base_height += (message_lines - 2) * 20
-        # 根据消息长度估算行数
-        estimated_lines = len(self._message) // 40 + 1
-        if estimated_lines > message_lines:
-            base_height += (estimated_lines - message_lines) * 18
-        return min(base_height, 350)
+            x = parent_rect.x() + (parent_rect.width() - self.width()) // 2
+            y = parent_rect.y() + (parent_rect.height() - self.height()) // 2
+            self.move(x, y)
 
     def _get_icon_colors(self):
         """获取图标背景色和前景色"""
@@ -166,9 +154,10 @@ class ModernDialog(QDialog):
         # 消息
         message_label = QLabel(self._message)
         message_label.setWordWrap(True)
+        message_label.setMinimumWidth(260)  # 确保足够宽度用于换行
         message_label.setStyleSheet(f"""
             QLabel {{
-                color: rgba(255, 255, 255, 0.6);
+                color: rgba(255, 255, 255, 0.7);
                 font-size: 13px;
                 line-height: 1.5;
                 background: transparent;
