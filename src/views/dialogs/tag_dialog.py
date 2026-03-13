@@ -4,207 +4,422 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QGridLayout,
-    QDialog,
     QVBoxLayout,
-    QGroupBox,
+    QFrame,
     QTextEdit,
     QMessageBox,
     QListWidget,
     QComboBox,
+    QScrollArea,
+    QWidget,
 )
+from PyQt5.QtCore import Qt
 import subprocess
 import os
 import re
 
+from src.styles import Colors, Styles
+from src.resources.icons import IconManager
+from src.components.bottom_sheet_dialog import BottomSheetDialog
 
-class TagDialog(QDialog):
+
+class TagDialog(BottomSheetDialog):
     def __init__(self, pod_name, local_path, parent=None):
-        super().__init__(parent)
         self.pod_name = pod_name
         self.local_path = local_path
         self.tag_message = ""
         self.existing_tags = []
-        self.initUI()
+
+        super().__init__(parent, title=f"为 {pod_name} 打Tag", max_height_ratio=0.85)
+
+        self._build_content()
+        self._apply_content_styles()
+        self.setup_sheet_ui()
         self.load_existing_tags()
         self.load_tag_templates()
 
-    def initUI(self):
-        self.setWindowTitle(f"为 {self.pod_name} 打Tag")
-        self.setGeometry(300, 300, 700, 500)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f7;
-            }
-            QPushButton {
-                background-color: #007aff;
-                color: white;
+    def _build_content(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background: transparent;
                 border: none;
-                border-radius: 4px;
-                padding: 6px 14px;
-                font-size: 12px;
-                font-weight: 400;
-                min-height: 26px;
-                max-height: 26px;
-                min-width: 70px;
-            }
-            QPushButton:hover {
-                background-color: #0051d5;
-            }
-            QPushButton[type="cancel"] {
-                background-color: #e8e8ed;
-                color: #1d1d1f;
-            }
-            QPushButton[type="cancel"]:hover {
-                background-color: #d1d1d6;
-            }
-            QLabel {
-                color: #86868b;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QLineEdit {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 8px 12px;
-                background-color: white;
-                min-height: 32px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #007aff;
-            }
-            QTextEdit {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 8px;
-                background-color: white;
-            }
-            QComboBox {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 6px 12px;
-                background-color: white;
-                min-height: 26px;
-            }
-            QListWidget {
-                border: 1px solid #d1d1d6;
-                border-radius: 4px;
-                padding: 4px;
-                background-color: white;
-                max-height: 120px;
-            }
-            QListWidget::item {
-                padding: 4px;
-                border-radius: 4px;
-            }
-            QListWidget::item:hover {
-                background-color: #f0f0f0;
-            }
-            QGroupBox {
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding-top: 12px;
-                font-weight: 600;
-                background-color: white;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 4px;
-                color: #1d1d1f;
-            }
+            }}
+            {Styles.SCROLL_BAR}
         """)
 
-        layout = QVBoxLayout()
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent; border: none;")
+        content_layout = QVBoxLayout(scroll_content)
+        content_layout.setContentsMargins(0, 0, 8, 0)
+        content_layout.setSpacing(16)
 
-        # 显示Pod信息
-        info_group = QGroupBox("Pod信息")
-        info_layout = QGridLayout()
-        info_layout.addWidget(QLabel("Pod名称:"), 0, 0)
-        info_layout.addWidget(QLabel(self.pod_name), 0, 1)
-        info_layout.addWidget(QLabel("本地路径:"), 1, 0)
-        info_layout.addWidget(QLabel(self.local_path), 1, 1)
+        info_card = self._build_info_card()
+        content_layout.addWidget(info_card)
 
-        # 当前分支
-        info_layout.addWidget(QLabel("当前分支:"), 2, 0)
-        self.current_branch_label = QLabel("加载中...")
-        self.current_branch_label.setStyleSheet("color: #007aff; font-weight: bold;")
-        info_layout.addWidget(self.current_branch_label, 2, 1)
+        tag_card = self._build_tag_card()
+        content_layout.addWidget(tag_card)
 
-        # 分支切换按钮
-        switch_branch_btn = QPushButton("切换分支")
-        switch_branch_btn.setProperty("buttonType", "info")
-        switch_branch_btn.clicked.connect(self.switch_branch)
-        info_layout.addWidget(switch_branch_btn, 2, 2)
+        scroll.setWidget(scroll_content)
+        self.content_layout.addWidget(scroll, 1)
 
-        info_group.setLayout(info_layout)
-        layout.addWidget(info_group)
+        self.confirm_btn.setText("创建Tag")
+        self.confirm_btn.clicked.disconnect()
+        self.confirm_btn.clicked.connect(self.create_tag)
+        self.cancel_btn.clicked.disconnect()
+        self.cancel_btn.clicked.connect(self.reject)
 
-        # 加载当前分支
         self.load_current_branch()
 
-        # Tag信息输入
-        tag_group = QGroupBox("Tag信息")
-        tag_layout = QVBoxLayout()
+    def _apply_content_styles(self):
+        pass
 
-        # Tag名称输入
-        tag_name_layout = QHBoxLayout()
-        tag_name_layout.addWidget(QLabel("Tag名称:"))
+    def _build_info_card(self):
+        card = QFrame()
+        card.setObjectName("infoCard")
+        card.setStyleSheet(f"""
+            QFrame#infoCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.SURFACE_BORDER};
+                border-radius: 12px;
+            }}
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
+
+        section_title = QLabel("Pod 信息")
+        section_title.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_LABEL};
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        layout.addWidget(section_title)
+
+        info_grid = QGridLayout()
+        info_grid.setSpacing(8)
+        info_grid.setColumnStretch(1, 1)
+
+        labels = [
+            ("Pod名称:", self.pod_name),
+            ("本地路径:", self.local_path),
+        ]
+
+        for row, (label_text, value) in enumerate(labels):
+            label = QLabel(label_text)
+            label.setStyleSheet(f"""
+                QLabel {{
+                    color: {Colors.TEXT_MUTED};
+                    font-size: 12px;
+                    background: transparent;
+                    border: none;
+                }}
+            """)
+            info_grid.addWidget(label, row, 0)
+
+            value_label = QLabel(value)
+            value_label.setStyleSheet(f"""
+                QLabel {{
+                    color: {Colors.TEXT_PRIMARY};
+                    font-size: 12px;
+                    background: transparent;
+                    border: none;
+                }}
+            """)
+            info_grid.addWidget(value_label, row, 1)
+
+        branch_label = QLabel("当前分支:")
+        branch_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_MUTED};
+                font-size: 12px;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        info_grid.addWidget(branch_label, 2, 0)
+
+        branch_row = QHBoxLayout()
+        branch_row.setSpacing(8)
+
+        self.current_branch_label = QLabel("加载中...")
+        self.current_branch_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.BRANCH};
+                font-size: 12px;
+                font-weight: 600;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        branch_row.addWidget(self.current_branch_label)
+        branch_row.addStretch()
+
+        switch_btn = QPushButton("切换分支")
+        switch_btn.setFixedHeight(28)
+        switch_btn.setCursor(Qt.PointingHandCursor)
+        switch_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 0.1);
+                color: {Colors.TEXT_PRIMARY};
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                padding: 0 12px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 0.15);
+            }}
+        """)
+        switch_btn.clicked.connect(self.switch_branch)
+        branch_row.addWidget(switch_btn)
+
+        branch_widget = QWidget()
+        branch_widget.setStyleSheet("background: transparent; border: none;")
+        branch_widget.setLayout(branch_row)
+        info_grid.addWidget(branch_widget, 2, 1)
+
+        layout.addLayout(info_grid)
+        return card
+
+    def _build_tag_card(self):
+        card = QFrame()
+        card.setObjectName("tagCard")
+        card.setStyleSheet(f"""
+            QFrame#tagCard {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.SURFACE_BORDER};
+                border-radius: 12px;
+            }}
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
+
+        section_title = QLabel("Tag 信息")
+        section_title.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_LABEL};
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        layout.addWidget(section_title)
+
+        tag_name_row = QHBoxLayout()
+        tag_name_row.setSpacing(8)
+
+        tag_name_label = QLabel("Tag名称:")
+        tag_name_label.setFixedWidth(70)
+        tag_name_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 13px;
+                font-weight: 500;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        tag_name_row.addWidget(tag_name_label)
+
         self.tag_name_edit = QLineEdit()
         self.tag_name_edit.setPlaceholderText("例如: v1.0.0")
+        self.tag_name_edit.setFixedHeight(36)
+        self.tag_name_edit.setStyleSheet(Styles.LINE_EDIT)
         self.tag_name_edit.textChanged.connect(self.validate_tag_name)
-        tag_name_layout.addWidget(self.tag_name_edit)
-        tag_layout.addLayout(tag_name_layout)
+        tag_name_row.addWidget(self.tag_name_edit)
 
-        # Tag名称验证提示
+        layout.addLayout(tag_name_row)
+
         self.tag_name_hint = QLabel()
-        self.tag_name_hint.setStyleSheet("color: #ff3b30; font-size: 11px;")
-        tag_layout.addWidget(self.tag_name_hint)
+        self.tag_name_hint.setStyleSheet(f"""
+            QLabel {{
+                color: #ff3b30;
+                font-size: 11px;
+                background: transparent;
+                border: none;
+                margin-left: 78px;
+            }}
+        """)
+        layout.addWidget(self.tag_name_hint)
 
-        # 版本建议
-        version_layout = QHBoxLayout()
-        version_layout.addWidget(QLabel("版本建议:"))
+        version_row = QHBoxLayout()
+        version_row.setSpacing(8)
+
+        version_label = QLabel("版本建议:")
+        version_label.setFixedWidth(70)
+        version_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_MUTED};
+                font-size: 12px;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        version_row.addWidget(version_label)
+
         self.version_combo = QComboBox()
+        self.version_combo.setFixedHeight(32)
+        self.version_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                padding: 0 10px;
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 12px;
+            }}
+            QComboBox:hover {{
+                background-color: rgba(255, 255, 255, 0.15);
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid {Colors.TEXT_MUTED};
+                margin-right: 8px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: rgba(30, 30, 40, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                selection-background-color: rgba(59, 130, 246, 0.4);
+                color: {Colors.TEXT_PRIMARY};
+            }}
+        """)
         self.version_combo.currentTextChanged.connect(self.use_suggested_version)
-        version_layout.addWidget(self.version_combo)
-        tag_layout.addLayout(version_layout)
+        version_row.addWidget(self.version_combo)
+        version_row.addStretch()
 
-        # 已有Tag列表
-        tag_layout.addWidget(QLabel("已有Tag (点击使用):"))
+        layout.addLayout(version_row)
+
+        existing_label = QLabel("已有Tag (点击使用):")
+        existing_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_MUTED};
+                font-size: 12px;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        layout.addWidget(existing_label)
+
         self.existing_tags_list = QListWidget()
+        self.existing_tags_list.setMaximumHeight(100)
+        self.existing_tags_list.setStyleSheet(f"""
+            QListWidget {{
+                background-color: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 8px;
+                padding: 4px;
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 12px;
+            }}
+            QListWidget::item {{
+                background-color: transparent;
+                border-radius: 4px;
+                padding: 6px 10px;
+            }}
+            QListWidget::item:hover {{
+                background-color: rgba(255, 255, 255, 0.1);
+            }}
+            QListWidget::item:selected {{
+                background-color: rgba(59, 130, 246, 0.3);
+            }}
+        """)
         self.existing_tags_list.itemClicked.connect(self.use_existing_tag)
-        tag_layout.addWidget(self.existing_tags_list)
+        layout.addWidget(self.existing_tags_list)
 
-        # Tag消息模板选择
-        template_layout = QHBoxLayout()
-        template_layout.addWidget(QLabel("消息模板:"))
+        template_row = QHBoxLayout()
+        template_row.setSpacing(8)
+
+        template_label = QLabel("消息模板:")
+        template_label.setFixedWidth(70)
+        template_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_MUTED};
+                font-size: 12px;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        template_row.addWidget(template_label)
+
         self.template_combo = QComboBox()
+        self.template_combo.setFixedHeight(32)
+        self.template_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                padding: 0 10px;
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 12px;
+            }}
+            QComboBox:hover {{
+                background-color: rgba(255, 255, 255, 0.15);
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid {Colors.TEXT_MUTED};
+                margin-right: 8px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: rgba(30, 30, 40, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                selection-background-color: rgba(59, 130, 246, 0.4);
+                color: {Colors.TEXT_PRIMARY};
+            }}
+        """)
         self.template_combo.currentIndexChanged.connect(self.apply_template)
-        template_layout.addWidget(self.template_combo)
-        tag_layout.addLayout(template_layout)
+        template_row.addWidget(self.template_combo)
+        template_row.addStretch()
 
-        # Tag消息输入
-        tag_layout.addWidget(QLabel("Tag消息:"))
+        layout.addLayout(template_row)
+
+        msg_label = QLabel("Tag消息:")
+        msg_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_MUTED};
+                font-size: 12px;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        layout.addWidget(msg_label)
+
         self.tag_message_edit = QTextEdit()
         self.tag_message_edit.setMaximumHeight(80)
-        tag_layout.addWidget(self.tag_message_edit)
+        self.tag_message_edit.setStyleSheet(Styles.TEXT_EDIT)
+        layout.addWidget(self.tag_message_edit)
 
-        tag_group.setLayout(tag_layout)
-        layout.addWidget(tag_group)
-
-        # 按钮
-        btn_layout = QHBoxLayout()
-        create_btn = QPushButton("创建Tag")
-        create_btn.clicked.connect(self.create_tag)
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setProperty("type", "cancel")
-        cancel_btn.clicked.connect(self.reject)
-
-        btn_layout.addWidget(create_btn)
-        btn_layout.addWidget(cancel_btn)
-        layout.addLayout(btn_layout)
-
-        self.setLayout(layout)
+        return card
 
     def load_existing_tags(self):
         """加载已有tag列表"""
@@ -220,12 +435,10 @@ class TagDialog(QDialog):
                 self.existing_tags = result.stdout.strip().split("\n")
                 self.existing_tags = [tag for tag in self.existing_tags if tag]
 
-                # 显示到列表
                 self.existing_tags_list.clear()
                 for tag in self.existing_tags:
                     self.existing_tags_list.addItem(tag)
 
-                # 生成版本建议
                 self.suggest_versions()
 
         except Exception as e:
@@ -248,25 +461,21 @@ class TagDialog(QDialog):
         self.version_combo.clear()
 
         if not self.existing_tags:
-            # 如果没有tag，建议v1.0.0
             self.version_combo.addItem("v1.0.0")
             return
 
-        # 尝试从最新tag解析版本号
         latest_tag = self.existing_tags[0]
         version_match = re.search(r"v?(\d+)\.(\d+)\.(\d+)", latest_tag)
 
         if version_match:
             major, minor, patch = map(int, version_match.groups())
 
-            # 建议补丁版本递增
             suggestions = [
-                f"v{major}.{minor}.{patch + 1}",  # 补丁版本
-                f"v{major}.{minor + 1}.0",  # 次版本
-                f"v{major + 1}.0.0",  # 主版本
+                f"v{major}.{minor}.{patch + 1}",
+                f"v{major}.{minor + 1}.0",
+                f"v{major + 1}.0.0",
             ]
 
-            # 也添加主版本号前缀的版本
             suggestions.extend(
                 [
                     f"{major}.{minor}.{patch + 1}",
@@ -278,7 +487,6 @@ class TagDialog(QDialog):
             for suggestion in suggestions[:6]:
                 self.version_combo.addItem(suggestion)
         else:
-            # 无法解析版本号，建议v1.0.0
             self.version_combo.addItem("v1.0.0")
 
     def validate_tag_name(self, tag_name):
@@ -287,31 +495,42 @@ class TagDialog(QDialog):
             self.tag_name_hint.setText("")
             return
 
-        # Git tag命名规则：不能包含空格、~^:等特殊字符
-        # 不允许以.开头，不能连续..等
         errors = []
 
-        # 检查非法字符
         if re.search(r"[\s~^:?*\[\]\\]", tag_name):
             errors.append("不能包含空格、~^:?*[]\\等特殊字符")
 
-        # 检查是否以.开头
         if tag_name.startswith("."):
             errors.append("不能以.开头")
 
-        # 检查连续的点
         if ".." in tag_name:
             errors.append("不能包含连续的..")
 
-        # 检查是否已存在
         if tag_name in self.existing_tags:
             errors.append(f"Tag '{tag_name}' 已存在，将覆盖")
 
         if errors:
             self.tag_name_hint.setText("; ".join(errors))
+            self.tag_name_hint.setStyleSheet(f"""
+                QLabel {{
+                    color: #ff3b30;
+                    font-size: 11px;
+                    background: transparent;
+                    border: none;
+                    margin-left: 78px;
+                }}
+            """)
         else:
             self.tag_name_hint.setText("✓ 格式正确")
-            self.tag_name_hint.setStyleSheet("color: #34c759; font-size: 11px;")
+            self.tag_name_hint.setStyleSheet(f"""
+                QLabel {{
+                    color: {Colors.TAG};
+                    font-size: 11px;
+                    background: transparent;
+                    border: none;
+                    margin-left: 78px;
+                }}
+            """)
 
     def use_suggested_version(self, version):
         """使用建议的版本号"""
@@ -323,7 +542,6 @@ class TagDialog(QDialog):
         tag_name = item.text()
         self.tag_name_edit.setText(tag_name)
 
-        # 获取tag消息
         try:
             result = subprocess.run(
                 ["git", "tag", "-l", tag_name, "-n999"],
@@ -333,7 +551,6 @@ class TagDialog(QDialog):
             )
 
             if result.returncode == 0:
-                # 提取tag消息（跳过第一行的tag名称）
                 lines = result.stdout.strip().split("\n")
                 if len(lines) > 1:
                     message = "\n".join(lines[1:])
@@ -344,13 +561,12 @@ class TagDialog(QDialog):
 
     def apply_template(self, index):
         """应用消息模板"""
-        if index == 0:  # "选择模板"
+        if index == 0:
             return
 
         template = self.template_combo.currentText()
         tag_name = self.tag_name_edit.text().strip()
 
-        # 替换模板变量
         message = template
         if tag_name:
             message = message.replace("{version}", tag_name)
@@ -362,24 +578,21 @@ class TagDialog(QDialog):
         tag_message = self.tag_message_edit.toPlainText().strip()
 
         if not tag_name:
-            QMessageBox.warning(self, "警告", "请输入Tag名称")
+            ModernDialog.warning(self, "警告", "请输入Tag名称")
             return
 
-        # 再次验证tag名称
         if re.search(r"[\s~^:?*\[\]\\]", tag_name):
-            QMessageBox.warning(self, "警告", "Tag名称包含非法字符，请检查红色提示信息")
+            ModernDialog.warning(self, "警告", "Tag名称包含非法字符，请检查红色提示信息")
             return
 
-        # 检查tag是否已存在
         if tag_name in self.existing_tags:
-            reply = QMessageBox.question(
+            reply = ModernDialog.question(
                 self,
                 "确认",
                 f"Tag '{tag_name}' 已存在，是否删除后重新创建？",
-                QMessageBox.Yes | QMessageBox.No,
+                ModernDialog.Yes | ModernDialog.No,
             )
-            if reply == QMessageBox.Yes:
-                # 删除已存在的tag
+            if reply == ModernDialog.Yes:
                 try:
                     subprocess.run(
                         ["git", "tag", "-d", tag_name],
@@ -387,7 +600,7 @@ class TagDialog(QDialog):
                         cwd=self.local_path,
                     )
                 except Exception as e:
-                    QMessageBox.warning(self, "警告", f"删除已有tag失败: {str(e)}")
+                    ModernDialog.warning(self, "警告", f"删除已有tag失败: {str(e)}")
                     return
             else:
                 return
@@ -421,7 +634,6 @@ class TagDialog(QDialog):
     def switch_branch(self):
         """切换Git分支"""
         try:
-            # 获取所有分支
             result = subprocess.run(
                 ["git", "branch", "-a"],
                 capture_output=True,
@@ -434,10 +646,9 @@ class TagDialog(QDialog):
             branches = [b for b in branches if not b.startswith("HEAD ->")]
 
             if not branches:
-                QMessageBox.information(self, "提示", "没有可用的分支")
+                ModernDialog.information(self, "提示", "没有可用的分支")
                 return
 
-            # 显示分支选择对话框
             from PyQt5.QtWidgets import QInputDialog
 
             current_branch = self.current_branch_label.text()
@@ -454,7 +665,6 @@ class TagDialog(QDialog):
             )
 
             if ok and branch_name:
-                # 切换分支
                 result = subprocess.run(
                     ["git", "checkout", branch_name],
                     capture_output=True,
@@ -463,14 +673,12 @@ class TagDialog(QDialog):
                     check=True,
                 )
 
-                QMessageBox.information(self, "成功", f"已切换到分支: {branch_name}")
+                ModernDialog.information(self, "成功", f"已切换到分支: {branch_name}")
 
-                # 重新加载当前分支
                 self.load_current_branch()
-                # 重新加载标签列表
                 self.load_existing_tags()
 
         except subprocess.CalledProcessError as e:
-            QMessageBox.warning(self, "警告", f"切换分支失败: {str(e)}")
+            ModernDialog.warning(self, "警告", f"切换分支失败: {str(e)}")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"切换分支错误: {str(e)}")
+            ModernDialog.error(self, "错误", f"切换分支错误: {str(e)}")

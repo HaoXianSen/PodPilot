@@ -1,31 +1,31 @@
-import re
-import json
-import subprocess
-import os
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QLabel,
     QLineEdit,
-    QGridLayout,
-    QDialog,
     QVBoxLayout,
-    QGroupBox,
-    QTextEdit,
     QMessageBox,
-    QComboBox,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QAbstractItemView,
     QWidget,
+    QScrollArea,
+    QFrame,
+    QSizePolicy,
     QApplication,
-    QCheckBox,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QBrush, QColor
+import os
+import json
+import subprocess
+import re
 import urllib.request
 import urllib.error
 import urllib.parse
+
+from src.styles import Colors, Styles
+from src.components.modern_dialog import ModernDialog
+from src.widgets.loading_widget import LoadingWidget
+from src.widgets.custom_dropdown import CustomDropdown
+from src.components.bottom_sheet_dialog import BottomSheetDialog
 
 
 def get_git_url_from_local_path(local_path):
@@ -71,7 +71,7 @@ def get_git_url_from_local_path(local_path):
                 return git_url
 
         return None
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -99,31 +99,22 @@ class MRInfoCollector(QThread):
     def _get_pod_branches_from_podfile(self, pod_name):
         """从Podfile中获取Pod引用的分支"""
         podfile_path = os.path.join(self.project_dir, "Podfile")
-        print(f"DEBUG: Looking for Podfile at {podfile_path}")
         if not os.path.exists(podfile_path):
-            print(f"DEBUG: Podfile not found!")
             return None
 
         try:
             with open(podfile_path, "r") as f:
                 content = f.read()
-
-            print(f"DEBUG: Podfile content length: {len(content)}")
 
             pod_pattern = r"pod\s+['\"]([^'\"]+)['\"]"
             branch_pattern = r":branch\s*=>\s*['\"]?([^'\"\s,]+)['\"]?"
             variable_pattern = r"^(\w+)\s*=\s*['\"]([^'\"]+)['\"]\s*$"
 
             for m in re.finditer(pod_pattern, content):
-                start_pos = m.start()
                 found_pod_name = m.group(1)
-
-                print(f"DEBUG: Found pod declaration: {found_pod_name}")
 
                 if found_pod_name != pod_name:
                     continue
-
-                print(f"DEBUG: Matching pod found: {pod_name}")
 
                 pod_declaration_pattern = (
                     r"pod\s+['\"]"
@@ -131,262 +122,119 @@ class MRInfoCollector(QThread):
                     + r"['\"].*?(?:\n\s*end|\n\s*$|\n\s*(?=pod\s+))"
                 )
                 pod_declaration_match = re.search(
-                    pod_declaration_pattern, content[start_pos:], re.DOTALL
+                    pod_declaration_pattern, content[m.start() :], re.DOTALL
                 )
 
                 if pod_declaration_match:
                     pod_declaration = pod_declaration_match.group(0)
-                    print(f"DEBUG: Pod declaration: {pod_declaration}")
                     branch_match = re.search(branch_pattern, pod_declaration)
                     if branch_match:
                         branch_name = branch_match.group(1)
-                        print(f"DEBUG: Found branch pattern: {branch_name}")
 
                         if not branch_name.startswith(
                             "'"
                         ) and not branch_name.startswith('"'):
-                            print(f"DEBUG: Branch is a variable, searching...")
                             for line in content.split("\n"):
                                 var_match = re.match(variable_pattern, line.strip())
                                 if var_match and var_match.group(1) == branch_name:
-                                    print(
-                                        f"DEBUG: Found variable: {var_match.group(1)} = {var_match.group(2)}"
-                                    )
                                     return var_match.group(2)
-                            print(
-                                f"DEBUG: Variable not found, returning raw: {branch_name}"
-                            )
-                            return branch_name
-                        else:
-                            print(f"DEBUG: Branch is a string: {branch_name}")
-                            return branch_name.strip("'\"")
 
-                return None
+                        return branch_name
 
-            print(f"DEBUG: Pod {pod_name} not found in Podfile")
             return None
-        except Exception as e:
-            print(f"DEBUG: Exception in _get_pod_branches_from_podfile: {e}")
+        except Exception:
             return None
-
-    def _get_pod_git_url_from_podfile(self, pod_name):
-        """从Podfile中获取Pod的Git URL"""
-        podfile_path = os.path.join(self.project_dir, "Podfile")
-        if not os.path.exists(podfile_path):
-            print(f"[DEBUG] Podfile not found at {podfile_path}")
-            return None
-
-        try:
-            with open(podfile_path, "r") as f:
-                content = f.read()
-
-            pod_pattern = r"pod\s+['\"]([^'\"]+)['\"]"
-            git_pattern = r":git\s*=>\s*['\"]([^'\"]+)['\"]"
-
-            for m in re.finditer(pod_pattern, content):
-                start_pos = m.start()
-                found_pod_name = m.group(1)
-
-                if found_pod_name != pod_name:
-                    continue
-
-                pod_declaration_pattern = (
-                    r"pod\s+['\"]"
-                    + re.escape(pod_name)
-                    + r"['\"].*?(?:\n\s*end|\n\s*$|\n\s*(?=pod\s+))"
-                )
-                pod_declaration_match = re.search(
-                    pod_declaration_pattern, content[start_pos:], re.DOTALL
-                )
-
-                if pod_declaration_match:
-                    pod_declaration = pod_declaration_match.group(0)
-                    git_match = re.search(git_pattern, pod_declaration)
-                    if git_match:
-                        git_url = git_match.group(1)
-                        print(
-                            f"[DEBUG] Found git URL from Podfile for {pod_name}: {git_url}"
-                        )
-                        return git_url
-
-            print(f"[DEBUG] Git URL for {pod_name} not found in Podfile")
-            return None
-        except Exception as e:
-            print(f"[DEBUG] Exception in _get_pod_git_url_from_podfile: {e}")
-            return None
-
-    def _get_recent_commits(self, repo_path, count=3):
-        """获取最近的commit信息"""
-        try:
-            result = subprocess.run(
-                ["git", "log", f"-{count}", "--pretty=format:%s"],
-                capture_output=True,
-                text=True,
-                cwd=repo_path,
-                timeout=10,
-                check=False,
-            )
-            if result.returncode == 0:
-                commits = result.stdout.strip().split("\n")
-                # 过滤空行
-                commits = [c.strip() for c in commits if c.strip()]
-                return commits
-            return []
-        except Exception as e:
-            print(f"DEBUG: Error getting recent commits: {e}")
-            return []
 
     def run(self):
-        try:
-            result = {}
+        """收集Pod的Git信息"""
+        pods_info = {}
 
-            # 添加主工程信息（如果提供）
-            if self.main_project_current_branch:
-                # 获取主工程的远程分支列表
-                main_remote_branches = []
-                try:
-                    fetch_result = subprocess.run(
-                        ["git", "fetch", "--prune"],
-                        capture_output=True,
-                        text=True,
-                        cwd=self.project_dir,
-                        timeout=30,
-                        check=False,
-                    )
+        for pod_name in self.pod_names:
+            try:
+                local_path = self.pod_config.get(pod_name, "")
+                if not local_path or not os.path.exists(local_path):
+                    pods_info[pod_name] = {"error": "未配置本地路径或路径不存在"}
+                    continue
 
-                    branches_result = subprocess.run(
-                        ["git", "branch", "-r"],
-                        capture_output=True,
-                        text=True,
-                        cwd=self.project_dir,
-                        timeout=10,
-                        check=False,
-                    )
-                    if branches_result.returncode == 0:
-                        branch_lines = branches_result.stdout.strip().split("\n")
-                        for b in branch_lines:
-                            branch_line = b.strip()
-                            # 跳过空行和 HEAD 指向行
-                            if not branch_line or "->" in branch_line:
-                                continue
-                            # 移除 origin/ 前缀
-                            branch_name = branch_line.replace("origin/", "")
-                            main_remote_branches.append(branch_name)
-                        main_remote_branches = list(set(main_remote_branches))
-                        main_remote_branches.sort()
-                except Exception as e:
-                    print(f"DEBUG: Error getting main project remote branches: {e}")
+                git_url = get_git_url_from_local_path(local_path)
+                if not git_url:
+                    pods_info[pod_name] = {"error": "无法获取Git URL"}
+                    continue
 
-                # 获取主工程最近3次commit
-                main_recent_commits = self._get_recent_commits(self.project_dir)
+                result = subprocess.run(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    capture_output=True,
+                    text=True,
+                    cwd=local_path,
+                    timeout=10,
+                )
+                current_branch = (
+                    result.stdout.strip() if result.returncode == 0 else "未知"
+                )
 
-                result[self.main_project_current_branch] = {
-                    "name": os.path.basename(self.project_dir),
-                    "current_branch": self.main_project_current_branch,
-                    "remote_branches": main_remote_branches,
-                    "git_url": self.main_project_git_url,
-                    "is_main_project": True,
-                    "recent_commits": main_recent_commits,
+                result = subprocess.run(
+                    ["git", "branch", "-r"],
+                    capture_output=True,
+                    text=True,
+                    cwd=local_path,
+                    timeout=10,
+                )
+                remote_branches = []
+                if result.returncode == 0:
+                    remote_branches = [
+                        b.strip()
+                        for b in result.stdout.strip().split("\n")
+                        if b.strip() and "->" not in b
+                    ]
+
+                podfile_branch = self._get_pod_branches_from_podfile(pod_name)
+
+                pods_info[pod_name] = {
+                    "git_url": git_url,
+                    "current_branch": current_branch,
+                    "remote_branches": remote_branches,
+                    "podfile_branch": podfile_branch,
+                    "local_path": local_path,
                 }
 
-            for pod_name in self.pod_names:
-                try:
-                    local_path = self.pod_config.get(pod_name, "")
-                    if not local_path or not os.path.exists(local_path):
-                        result[pod_name] = {"error": "本地路径不存在或未配置"}
-                        continue
+            except Exception as e:
+                pods_info[pod_name] = {"error": str(e)}
 
-                    branch_result = subprocess.run(
-                        ["git", "branch", "--show-current"],
-                        capture_output=True,
-                        text=True,
-                        cwd=local_path,
-                        timeout=10,
-                        check=False,
-                    )
-                    if branch_result.returncode != 0:
-                        result[pod_name] = {
-                            "error": f"获取分支失败: {branch_result.stderr.strip()}"
-                        }
-                        continue
+        # 添加主工程信息
+        if self.main_project_git_url:
+            # 获取主工程的远程分支列表
+            main_remote_branches = []
+            try:
+                # 主工程目录就是 self.project_dir
+                result = subprocess.run(
+                    ["git", "branch", "-r"],
+                    capture_output=True,
+                    text=True,
+                    cwd=self.project_dir,
+                    timeout=10,
+                )
+                if result.returncode == 0:
+                    main_remote_branches = [
+                        b.strip()
+                        for b in result.stdout.strip().split("\n")
+                        if b.strip() and "->" not in b
+                    ]
+            except Exception:
+                pass
 
-                    current_branch = branch_result.stdout.strip()
-                    if not current_branch:
-                        result[pod_name] = {"error": "当前分支为空"}
-                        continue
+            pods_info["主工程"] = {
+                "git_url": self.main_project_git_url,
+                "current_branch": self.main_project_current_branch or "未知",
+                "remote_branches": main_remote_branches,
+                "podfile_branch": self.main_project_current_branch,
+                "is_main_project": True,
+            }
 
-                    fetch_result = subprocess.run(
-                        ["git", "fetch", "--prune"],
-                        capture_output=True,
-                        text=True,
-                        cwd=local_path,
-                        timeout=30,
-                        check=False,
-                    )
-
-                    branches_result = subprocess.run(
-                        ["git", "branch", "-r"],
-                        capture_output=True,
-                        text=True,
-                        cwd=local_path,
-                        timeout=10,
-                        check=False,
-                    )
-                    remote_branches = []
-                    if branches_result.returncode == 0:
-                        branch_lines = branches_result.stdout.strip().split("\n")
-                        for b in branch_lines:
-                            branch_line = b.strip()
-                            # 跳过空行和 HEAD 指向行
-                            if not branch_line or "->" in branch_line:
-                                continue
-                            # 移除 origin/ 前缀
-                            branch_name = branch_line.replace("origin/", "")
-                            remote_branches.append(branch_name)
-                        remote_branches = list(set(remote_branches))
-                        remote_branches.sort()
-
-                    # 优先从 Podfile 获取 Git URL，这样更准确
-                    git_url = self._get_pod_git_url_from_podfile(pod_name)
-                    print(f"[DEBUG] Git URL from Podfile for {pod_name}: {git_url}")
-
-                    # 如果 Podfile 中没有，则从本地仓库获取
-                    if not git_url:
-                        git_url = get_git_url_from_local_path(local_path)
-                        print(
-                            f"[DEBUG] Git URL from local repo for {pod_name}: {git_url}"
-                        )
-
-                    if not git_url:
-                        result[pod_name] = {"error": "无法获取Git远程URL"}
-                        continue
-
-                    podfile_branch = self._get_pod_branches_from_podfile(pod_name)
-
-                    # 获取最近3次commit
-                    recent_commits = self._get_recent_commits(local_path)
-
-                    result[pod_name] = {
-                        "current_branch": current_branch,
-                        "remote_branches": remote_branches,
-                        "git_url": git_url,
-                        "local_path": local_path,
-                        "podfile_branch": podfile_branch,
-                        "recent_commits": recent_commits,
-                    }
-
-                except subprocess.TimeoutExpired:
-                    result[pod_name] = {"error": "操作超时"}
-                except Exception as e:
-                    result[pod_name] = {"error": f"未知错误: {str(e)}"}
-
-            self.finished.emit(result)
-        except Exception as e:
-            self.error_occurred.emit(f"MRInfoCollector严重错误: {str(e)}")
+        self.finished.emit(pods_info)
 
 
 class MRRequestWorker(QThread):
-    """异步发送MR请求 - 先创建私有库MR，再创建主工程MR并关联链接"""
+    """异步提交MR的工作线程"""
 
     finished = pyqtSignal(dict)
 
@@ -394,117 +242,329 @@ class MRRequestWorker(QThread):
         super().__init__()
         self.mr_info = mr_info
 
+    def _parse_git_url(self, git_url):
+        """解析Git URL，返回(platform, project_id/owner_repo)"""
+        if "gitlab" in git_url.lower():
+            match = re.search(r"gitlab[^/]*[:/](.+)\.git", git_url)
+            if match:
+                project_path = match.group(1)
+                project_id = project_path.replace("/", "%2F")
+                return "GitLab", project_id
+        elif "github" in git_url.lower():
+            match = re.search(r"github\.com[:/](.+?)(?:\.git)?$", git_url)
+            if match:
+                owner_repo = match.group(1).replace(".git", "")
+                return "GitHub", owner_repo
+        return None, None
+
+    def _get_existing_gitlab_mr(
+        self, gitlab_url, project_id, source_branch, target_branch, token
+    ):
+        """查询GitLab是否已存在指定源分支到目标分支的MR"""
+        try:
+            api_url = f"{gitlab_url}/api/v4/projects/{project_id}/merge_requests"
+            params = {
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+                "state": "opened",
+            }
+
+            query_string = urllib.parse.urlencode(params)
+            full_url = f"{api_url}?{query_string}"
+
+            req = urllib.request.Request(full_url)
+            req.add_header("PRIVATE-TOKEN", token)
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                if data and len(data) > 0:
+                    return data[0]
+                return None
+
+        except Exception:
+            return None
+
+    def _parse_existing_mr_links(self, description):
+        """解析已有MR描述中的私有库关联表格，去重（同一Pod保留最后一个）"""
+        if not description:
+            return {}
+
+        mr_links = {}
+        in_table = False
+        for line in description.split("\n"):
+            line = line.strip()
+
+            if line.startswith("| 私有库名"):
+                in_table = True
+                continue
+
+            if in_table:
+                if line.startswith("|") and "|" in line[1:]:
+                    parts = [p.strip() for p in line.split("|")[1:-1]]
+                    if len(parts) >= 2:
+                        pod_name = parts[0]
+                        mr_link = parts[1]
+                        if pod_name and mr_link and mr_link != "MR链接":
+                            mr_links[pod_name] = mr_link
+                elif not line.startswith("|"):
+                    break
+
+        return mr_links
+
+    def _build_enhanced_description(self, base_description, private_mr_links):
+        """构建包含私有库MR链接的增强描述"""
+        description = base_description.strip()
+
+        if private_mr_links:
+            description += "\n\n## 关联的私有库 MR\n\n"
+            description += "| 私有库名 | MR链接 |\n"
+            description += "|---------|-------|\n"
+            for pod_name, mr_url in private_mr_links.items():
+                description += f"| {pod_name} | {mr_url} |\n"
+
+        return description
+
+    def _update_gitlab_mr_description(
+        self, gitlab_url, project_id, mr_iid, new_description, token
+    ):
+        """更新已有GitLab MR的描述"""
+        try:
+            api_url = (
+                f"{gitlab_url}/api/v4/projects/{project_id}/merge_requests/{mr_iid}"
+            )
+
+            data = json.dumps({"description": new_description}).encode("utf-8")
+
+            req = urllib.request.Request(api_url, data=data, method="PUT")
+            req.add_header("PRIVATE-TOKEN", token)
+            req.add_header("Content-Type", "application/json")
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = json.loads(response.read().decode("utf-8"))
+                return result.get("web_url", "")
+
+        except Exception as e:
+            raise Exception(f"更新MR描述失败: {str(e)}")
+
+    def _create_gitlab_mr(
+        self,
+        gitlab_url,
+        project_id,
+        source_branch,
+        target_branch,
+        title,
+        description,
+        token,
+    ):
+        """创建GitLab MR"""
+        try:
+            api_url = f"{gitlab_url}/api/v4/projects/{project_id}/merge_requests"
+
+            data = json.dumps(
+                {
+                    "source_branch": source_branch,
+                    "target_branch": target_branch,
+                    "title": title,
+                    "description": description,
+                }
+            ).encode("utf-8")
+
+            req = urllib.request.Request(api_url, data=data)
+            req.add_header("PRIVATE-TOKEN", token)
+            req.add_header("Content-Type", "application/json")
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = json.loads(response.read().decode("utf-8"))
+                return result.get("web_url", "")
+
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode("utf-8")
+            raise Exception(f"HTTP {e.code}: {error_body}")
+        except Exception as e:
+            raise Exception(str(e))
+
+    def _create_github_pr(
+        self, owner_repo, source_branch, target_branch, title, description, token
+    ):
+        """创建GitHub PR"""
+        try:
+            api_url = f"https://api.github.com/repos/{owner_repo}/pulls"
+
+            data = json.dumps(
+                {
+                    "title": title,
+                    "head": source_branch,
+                    "base": target_branch,
+                    "body": description,
+                }
+            ).encode("utf-8")
+
+            req = urllib.request.Request(api_url, data=data)
+            req.add_header("Authorization", f"token {token}")
+            req.add_header("Accept", "application/vnd.github.v3+json")
+            req.add_header("Content-Type", "application/json")
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = json.loads(response.read().decode("utf-8"))
+                return result.get("html_url", "")
+
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode("utf-8")
+            raise Exception(f"HTTP {e.code}: {error_body}")
+        except Exception as e:
+            raise Exception(str(e))
+
     def run(self):
+        """执行批量创建MR"""
+        results = {}
         success_count = 0
         fail_count = 0
-        results = {}
-
-        # 分离主工程和私有库
+        private_mr_links = {}
         main_project_info = None
-        main_project_name = None
-        pod_infos = {}
 
+        # 先处理所有私有库Pod，收集MR链接
         for pod_name, info in self.mr_info.items():
-            if info.get("is_main_project"):
-                main_project_info = info
-                main_project_name = pod_name
-            else:
-                pod_infos[pod_name] = info
+            if info.get("is_main_project", False):
+                main_project_info = (pod_name, info)
+                continue
 
-        # 第一阶段：先创建所有私有库的 MR
-        pod_mr_links = []  # 收集成功创建的 MR 链接
+            try:
+                git_url = info.get("git_url", "")
+                source_branch = info.get("source_branch", "")
+                target_branch = info.get("target_branch", "")
+                title = info.get("title", "")
+                description = info.get("description", "")
+                gitlab_token = info.get("gitlab_token", "")
+                github_token = info.get("github_token", "")
 
-        for pod_name, info in pod_infos.items():
-            result = self._create_single_mr(pod_name, info)
-            results[pod_name] = result
+                platform, project_id = self._parse_git_url(git_url)
 
-            if "error" in result:
+                if platform == "GitLab" and gitlab_token:
+                    gitlab_url_base = re.search(r"(https?://[^/]+)", git_url)
+                    if not gitlab_url_base:
+                        raise Exception("无法解析GitLab URL")
+
+                    gitlab_url_base = gitlab_url_base.group(1)
+                    mr_url = self._create_gitlab_mr(
+                        gitlab_url_base,
+                        project_id,
+                        source_branch,
+                        target_branch,
+                        title,
+                        description,
+                        gitlab_token,
+                    )
+                    results[pod_name] = {"platform": "GitLab", "mr_url": mr_url}
+                    private_mr_links[pod_name] = mr_url
+                    success_count += 1
+
+                elif platform == "GitHub" and github_token:
+                    pr_url = self._create_github_pr(
+                        project_id,
+                        source_branch,
+                        target_branch,
+                        title,
+                        description,
+                        github_token,
+                    )
+                    results[pod_name] = {"platform": "GitHub", "pr_url": pr_url}
+                    private_mr_links[pod_name] = pr_url
+                    success_count += 1
+                else:
+                    results[pod_name] = {"error": "不支持的平台或缺少Token"}
+                    fail_count += 1
+
+            except Exception as e:
+                results[pod_name] = {"error": str(e)}
                 fail_count += 1
-            else:
-                success_count += 1
-                # 收集成功的 MR 链接
-                mr_url = result.get("mr_url") or result.get("pr_url", "")
-                if mr_url:
-                    pod_mr_links.append({"name": pod_name, "url": mr_url})
 
-        # 第二阶段：创建或更新主工程 MR（如果有的话）
-        if main_project_info and main_project_name:
-            source_branch = main_project_info.get("source_branch", "")
-            target_branch = main_project_info.get("target_branch", "")
+        # 处理主工程MR（在所有私有库MR创建完成后）
+        if main_project_info:
+            pod_name, info = main_project_info
+            try:
+                git_url = info.get("git_url", "")
+                source_branch = info.get("source_branch", "")
+                target_branch = info.get("target_branch", "")
+                title = info.get("title", "")
+                description = info.get("description", "")
+                gitlab_token = info.get("gitlab_token", "")
 
-            # 检查主工程是否已有对应的 MR
-            existing_mr = None
-            if source_branch and target_branch:
-                existing_mr = self._get_existing_gitlab_mr(
-                    main_project_info, source_branch, target_branch
-                )
+                platform, project_id = self._parse_git_url(git_url)
 
-            if existing_mr:
-                # 已存在 MR，更新描述
-                print(
-                    f"[DEBUG] 主工程已存在 MR，将更新描述: {existing_mr.get('web_url')}"
-                )
+                if platform == "GitLab" and gitlab_token:
+                    gitlab_url_base = re.search(r"(https?://[^/]+)", git_url)
+                    if not gitlab_url_base:
+                        raise Exception("无法解析GitLab URL")
 
-                if pod_mr_links:
-                    # 解析现有描述中的关联
-                    existing_description = existing_mr.get("description", "")
-                    existing_links = self._parse_existing_mr_links(existing_description)
+                    gitlab_url_base = gitlab_url_base.group(1)
 
-                    # 构建新的描述（合并已有和新创建的）
-                    enhanced_desc = self._build_enhanced_description(
-                        existing_description, pod_mr_links, existing_links
+                    # 查询是否已存在MR
+                    existing_mr = self._get_existing_gitlab_mr(
+                        gitlab_url_base,
+                        project_id,
+                        source_branch,
+                        target_branch,
+                        gitlab_token,
                     )
 
-                    # 更新 MR 描述
-                    mr_iid = existing_mr.get("iid")
-                    update_result = self._update_gitlab_mr_description(
-                        main_project_info, mr_iid, enhanced_desc
-                    )
+                    if existing_mr:
+                        # 已存在MR，更新描述
+                        existing_description = existing_mr.get("description", "")
+                        existing_mr_links = self._parse_existing_mr_links(
+                            existing_description
+                        )
 
-                    if "error" in update_result:
-                        results[main_project_name] = update_result
-                        fail_count += 1
-                    else:
-                        results[main_project_name] = {
+                        # 合并私有库MR链接
+                        merged_links = {**existing_mr_links, **private_mr_links}
+
+                        # 构建增强描述
+                        enhanced_description = self._build_enhanced_description(
+                            description, merged_links
+                        )
+
+                        # 更新MR描述
+                        mr_iid = existing_mr.get("iid")
+                        mr_url = self._update_gitlab_mr_description(
+                            gitlab_url_base,
+                            project_id,
+                            mr_iid,
+                            enhanced_description,
+                            gitlab_token,
+                        )
+                        results[pod_name] = {
                             "platform": "GitLab",
-                            "mr_url": update_result.get(
-                                "mr_url", existing_mr.get("web_url")
-                            ),
-                            "mr_iid": mr_iid,
+                            "mr_url": mr_url,
                             "action": "updated",
-                            "success": True,
+                        }
+                        success_count += 1
+                    else:
+                        # 不存在MR，创建新的
+                        enhanced_description = self._build_enhanced_description(
+                            description, private_mr_links
+                        )
+
+                        mr_url = self._create_gitlab_mr(
+                            gitlab_url_base,
+                            project_id,
+                            source_branch,
+                            target_branch,
+                            title,
+                            enhanced_description,
+                            gitlab_token,
+                        )
+                        results[pod_name] = {
+                            "platform": "GitLab",
+                            "mr_url": mr_url,
+                            "action": "created",
                         }
                         success_count += 1
                 else:
-                    # 没有新的私有库 MR 关联需要添加
-                    results[main_project_name] = {
-                        "platform": "GitLab",
-                        "mr_url": existing_mr.get("web_url"),
-                        "mr_iid": existing_mr.get("iid"),
-                        "action": "exists",
-                        "message": "MR 已存在，无需更新",
-                        "success": True,
-                    }
-                    success_count += 1
-            else:
-                # 不存在 MR，创建新的
-                print(f"[DEBUG] 主工程不存在 MR，将创建新的")
-
-                # 在主工程描述中追加私有库 MR 链接
-                if pod_mr_links:
-                    original_desc = main_project_info.get("description", "")
-                    enhanced_desc = self._build_enhanced_description(
-                        original_desc, pod_mr_links
-                    )
-                    main_project_info["description"] = enhanced_desc
-
-                result = self._create_single_mr(main_project_name, main_project_info)
-                results[main_project_name] = result
-
-                if "error" in result:
+                    results[pod_name] = {"error": "不支持的平台或缺少Token"}
                     fail_count += 1
-                else:
-                    success_count += 1
+
+            except Exception as e:
+                results[pod_name] = {"error": str(e)}
+                fail_count += 1
 
         self.finished.emit(
             {
@@ -514,531 +574,444 @@ class MRRequestWorker(QThread):
             }
         )
 
-    def _parse_existing_mr_links(self, description):
-        """解析 MR 描述中已有的私有库关联链接
 
-        Returns:
-            list: 已有的关联列表 [{"name": xxx, "url": xxx}, ...]
-            同一 Pod 只保留最后一个（去重）
-        """
-        if not description:
-            return []
-
-        import re
-
-        links = []
-
-        # 匹配 Markdown 表格格式: | Pod 名称 | MR 链接 |
-        # 表格格式:
-        # | Pod 名称 | MR 链接 |
-        # |----------|--------|
-        # | name1 | url1 |
-        # | name2 | url2 |
-
-        # 查找表格内容
-        table_pattern = r"\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|"
-        matches = re.finditer(table_pattern, description)
-
-        for match in matches:
-            pod_name = match.group(1).strip()
-            mr_url = match.group(2).strip()
-
-            # 跳过表头和分隔线
-            if pod_name == "Pod 名称" or pod_name == "----------" or not mr_url:
-                continue
-
-            # 验证是否是有效的 URL（包含 gitlab 或 github）
-            if "http" in mr_url.lower():
-                links.append({"name": pod_name, "url": mr_url})
-
-        # 去重：同一 Pod 保留最后一个
-        seen = {}
-        for link in links:
-            seen[link["name"]] = link
-
-        result = list(seen.values())
-
-        print(f"[DEBUG] 解析到已有关联（去重后）: {result}")
-        return result
-
-    def _build_enhanced_description(
-        self, original_desc, pod_mr_links, existing_links=None
-    ):
-        """构建包含私有库 MR 链接的增强描述
-
-        处理步骤：
-        1. 如果存在多个"关联的私有库 MR"表格，只保留最后一个
-        2. 合并本次成功的链接（新的覆盖旧的）
-        3. 构建完整新表格并替换所有旧表格
-
-        Args:
-            original_desc: 原始描述
-            pod_mr_links: 本次新创建的 MR 链接列表（只处理成功的）
-            existing_links: 已有的 MR 链接列表
-        """
-        enhanced_desc = original_desc or ""
-
-        import re
-
-        # 1. 如果存在多个表格，只保留最后一个，删除其他的
-        table_pattern = r"\n*---\n*\n*## 关联的私有库 MR\n*\n*\| Pod 名称 \| MR 链接 \|\n*\|[-|]+\|[-|]+\|\n*(.*?)(?=\n*---\n*|\Z)"
-        matches = list(re.finditer(table_pattern, enhanced_desc, re.DOTALL))
-
-        if len(matches) > 1:
-            # 有多个表格，保留最后一个，删除其他的
-            last_match = matches[-1]
-            # 从后往前删除（避免索引变化）
-            for i in range(len(matches) - 2, -1, -1):
-                match = matches[i]
-                enhanced_desc = (
-                    enhanced_desc[: match.start()] + enhanced_desc[match.end() :]
-                )
-
-        # 2. 合并链接：本次成功的优先，覆盖旧的
-        all_links = []
-        seen = set()
-
-        # 先添加本次成功的（优先）
-        if pod_mr_links:
-            for link in pod_mr_links:
-                all_links.append({"name": link["name"], "url": link["url"]})
-                seen.add(link["name"])
-
-        # 再添加旧的（不在本次成功中的）
-        if existing_links:
-            for link in existing_links:
-                if link["name"] not in seen:
-                    all_links.append({"name": link["name"], "url": link["url"]})
-
-        # 3. 构建新表格并替换
-        if all_links:
-            new_table = "\n\n---\n\n"
-            new_table += "## 关联的私有库 MR\n\n"
-            new_table += "| Pod 名称 | MR 链接 |\n"
-            new_table += "|----------|--------|\n"
-
-            for link in all_links:
-                new_table += f"| {link['name']} | {link['url']} |\n"
-
-            # 替换所有旧的表格
-            enhanced_desc = re.sub(
-                table_pattern, new_table, enhanced_desc, flags=re.DOTALL
-            )
-
-            # 如果没有匹配到（原来没有表格），直接追加
-            if "## 关联的私有库 MR" not in enhanced_desc:
-                enhanced_desc += new_table
-
-        return enhanced_desc
-
-    def _create_single_mr(self, pod_name, info):
-        """创建单个 MR"""
-        git_url = info.get("git_url", "")
-        source_branch = info.get("source_branch", "")
-        target_branch = info.get("target_branch", "")
-        title = info.get("title", "")
-        description = info.get("description", "")
-        gitlab_token = info.get("gitlab_token", "")
-        github_token = info.get("github_token", "")
-
-        print(f"[DEBUG] Processing {pod_name}")
-        print(f"[DEBUG]   git_url: '{git_url}'")
-        print(f"[DEBUG]   source_branch: {source_branch}")
-        print(f"[DEBUG]   target_branch: {target_branch}")
-
-        # 检查 git_url 是否为空
-        if not git_url or not git_url.strip():
-            return {"error": "Git URL 为空，无法创建 MR"}
-
-        try:
-            # 判断是GitLab还是GitHub
-            if "gitlab" in git_url.lower():
-                if not gitlab_token:
-                    return {"error": "需要GitLab访问令牌"}
-                else:
-                    return self._create_gitlab_mr(
-                        git_url,
-                        source_branch,
-                        target_branch,
-                        title,
-                        description,
-                        gitlab_token,
-                    )
-            elif "github" in git_url.lower():
-                if not github_token:
-                    return {"error": "需要GitHub访问令牌"}
-                else:
-                    return self._create_github_pr(
-                        git_url,
-                        source_branch,
-                        target_branch,
-                        title,
-                        description,
-                        github_token,
-                    )
-            else:
-                return {"error": "不支持的Git平台"}
-        except urllib.error.URLError as e:
-            return {"error": f"网络错误: {str(e)}"}
-        except Exception as e:
-            return {"error": f"创建失败: {str(e)}"}
-
-    def _create_gitlab_mr(
-        self, git_url, source_branch, target_branch, title, description, token
-    ):
-        """创建GitLab Merge Request"""
-        # 在 try 块外初始化变量，确保在 except 块中可以访问
-        host = ""
-        path_part = ""
-        base_url = ""
-        api_url = ""
-
-        try:
-            # 解析项目路径和主机
-            if git_url.startswith("git@"):
-                # 格式: git@gitlab.example.com:group/project.git
-                parts = git_url.replace("git@", "").split(":")
-                host = parts[0]
-                path_part = parts[1] if len(parts) > 1 else ""
-                # 移除 .git 后缀
-                path_part = path_part.replace(".git", "")
-            else:
-                # 格式: https://gitlab.example.com/group/project.git
-                # 或: https://username@gitlab.example.com/group/project.git
-                from urllib.parse import urlparse
-
-                parsed = urlparse(git_url)
-                host = (
-                    parsed.hostname
-                )  # 使用 hostname 而不是 netloc，这样会自动移除用户名
-                path_part = parsed.path
-                # 移除开头的 / 和 .git 后缀
-                path_part = path_part.lstrip("/").replace(".git", "")
-
-            base_url = f"https://{host}/api/v4"
-
-            # 构建请求数据
-            data = {
-                "source_branch": source_branch,
-                "target_branch": target_branch,
-                "title": title,
-                "description": description,
-                "remove_source_branch": False,
-            }
-
-            # 尝试不同的路径编码方式（针对不同 GitLab 版本的兼容性）
-            encoding_attempts = [
-                ("标准编码（斜杠编码）", urllib.parse.quote(path_part, safe="")),
-                ("不编码斜杠", urllib.parse.quote(path_part, safe="/")),
-            ]
-
-            last_error = None
-
-            for attempt_name, encoded_path in encoding_attempts:
-                # 构建API URL
-                api_url = f"{base_url}/projects/{encoded_path}/merge_requests"
-
-                print(f"[DEBUG] 尝试 {attempt_name}")
-                print(f"[DEBUG] GitLab MR API URL: {api_url}")
-                print(f"[DEBUG] Original path: {path_part}")
-                print(f"[DEBUG] Encoded path: {encoded_path}")
-                print(f"[DEBUG] Source: {source_branch}, Target: {target_branch}")
-
-                # 发送请求
-                req = urllib.request.Request(
-                    api_url,
-                    data=json.dumps(data).encode("utf-8"),
-                    headers={
-                        "Content-Type": "application/json",
-                        "PRIVATE-TOKEN": token,
-                    },
-                )
-
-                try:
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        result = json.loads(response.read().decode("utf-8"))
-                        print(f"[DEBUG] {attempt_name} 成功！")
-                        return {
-                            "platform": "GitLab",
-                            "mr_url": result.get("web_url", ""),
-                            "mr_iid": result.get("iid", 0),
-                            "success": True,
-                        }
-                except urllib.error.HTTPError as e:
-                    last_error = e
-                    error_body = ""
-                    try:
-                        error_body = e.read().decode("utf-8")
-                    except:
-                        pass
-
-                    print(f"[DEBUG] {attempt_name} 失败: HTTP {e.code} - {error_body}")
-
-                    # 如果是 404，尝试下一种编码方式
-                    if e.code == 404:
-                        continue
-                    else:
-                        # 其他 HTTP 错误，直接返回
-                        return {"error": f"HTTP错误 {e.code}: {e.reason}. {error_body}"}
-                except urllib.error.URLError as e:
-                    # 网络错误，直接返回
-                    return {"error": f"网络错误: {str(e)}"}
-
-            # 所有编码方式都失败，返回最后一个错误
-            if last_error:
-                error_body = ""
-                try:
-                    error_body = last_error.read().decode("utf-8")
-                except:
-                    pass
-                return {
-                    "error": f"所有编码方式都失败。最后错误: HTTP {last_error.code}: {last_error.reason}. {error_body}"
-                }
-            else:
-                return {"error": "未知的错误"}
-        except urllib.error.HTTPError as e:
-            error_body = ""
-            try:
-                error_body = e.read().decode("utf-8")
-            except:
-                pass
-
-            print(f"[DEBUG] HTTP Error Details:")
-            print(f"[DEBUG] Status Code: {e.code}")
-            print(f"[DEBUG] Reason: {e.reason}")
-            print(f"[DEBUG] Response Body: {error_body}")
-            if api_url:
-                print(f"[DEBUG] Failed URL: {api_url}")
-            print(f"[DEBUG] Original path_part: {path_part}")
-            return {"error": f"HTTP错误 {e.code}: {e.reason}. {error_body}"}
-        except urllib.error.URLError as e:
-            return {"error": f"网络错误: {str(e)}"}
-        except Exception as e:
-            return {"error": f"创建失败: {str(e)}"}
-
-    def _create_github_pr(
-        self, git_url, source_branch, target_branch, title, description, token
-    ):
-        """创建GitHub Pull Request"""
-        try:
-            # 提取项目信息
-            if ":" in git_url:
-                path_part = git_url.split(":")[1]
-            else:
-                from urllib.parse import urlparse
-
-                parsed = urlparse(git_url)
-                path_part = parsed.path.replace(".git", "")
-
-            path_part = path_part.replace(".git", "")
-            owner, repo = path_part.split("/")
-
-            # 构建API URL
-            api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
-
-            # 构建请求数据
-            data = {
-                "title": title,
-                "body": description,
-                "head": source_branch,
-                "base": target_branch,
-            }
-
-            # 发送请求
-            req = urllib.request.Request(
-                api_url,
-                data=json.dumps(data).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"token {token}",
-                    "User-Agent": "iPM",
-                },
-            )
-
-            with urllib.request.urlopen(req, timeout=30) as response:
-                result = json.loads(response.read().decode("utf-8"))
-                return {
-                    "platform": "GitHub",
-                    "pr_url": result.get("html_url", ""),
-                    "pr_number": result.get("number", 0),
-                    "success": True,
-                }
-        except urllib.error.URLError as e:
-            return {"error": f"网络错误: {str(e)}"}
-        except Exception as e:
-            return {"error": f"创建失败: {str(e)}"}
-
-    def _parse_gitlab_url(self, git_url):
-        """解析 GitLab URL，返回 host 和 path_part"""
-        if git_url.startswith("git@"):
-            parts = git_url.replace("git@", "").split(":")
-            host = parts[0]
-            path_part = parts[1] if len(parts) > 1 else ""
-            path_part = path_part.replace(".git", "")
-        else:
-            from urllib.parse import urlparse
-
-            parsed = urlparse(git_url)
-            host = parsed.hostname
-            path_part = parsed.path.lstrip("/").replace(".git", "")
-
-        return host, path_part
-
-    def _get_existing_gitlab_mr(self, project_info, source_branch, target_branch):
-        """查询已存在的 GitLab MR
-
-        Returns:
-            dict: MR 信息（包含 iid, web_url, description）
-            None: 不存在
-        """
-        git_url = project_info.get("git_url", "")
-        token = project_info.get("gitlab_token", "")
-
-        if not git_url or not token:
-            return None
-
-        if "gitlab" not in git_url.lower():
-            return None
-
-        try:
-            host, path_part = self._parse_gitlab_url(git_url)
-            base_url = f"https://{host}/api/v4"
-
-            # 尝试不同的编码方式
-            encoding_attempts = [
-                urllib.parse.quote(path_part, safe=""),
-                urllib.parse.quote(path_part, safe="/"),
-            ]
-
-            for encoded_path in encoding_attempts:
-                # 查询 MR: GET /projects/:id/merge_requests?source_branch=xxx&target_branch=xxx
-                api_url = f"{base_url}/projects/{encoded_path}/merge_requests?source_branch={source_branch}&target_branch={target_branch}&state=opened"
-
-                req = urllib.request.Request(
-                    api_url,
-                    headers={
-                        "PRIVATE-TOKEN": token,
-                    },
-                    method="GET",
-                )
-
-                try:
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        result = json.loads(response.read().decode("utf-8"))
-
-                        # GitLab 返回的是数组
-                        if result and isinstance(result, list) and len(result) > 0:
-                            mr = result[0]
-                            print(
-                                f"[DEBUG] 找到已存在的 MR: IID={mr.get('iid')}, URL={mr.get('web_url')}"
-                            )
-                            return {
-                                "iid": mr.get("iid"),
-                                "web_url": mr.get("web_url"),
-                                "description": mr.get("description", ""),
-                            }
-                except urllib.error.HTTPError as e:
-                    if e.code == 404:
-                        continue
-                    else:
-                        print(f"[DEBUG] 查询 MR 失败: HTTP {e.code}")
-                        return None
-                except Exception as e:
-                    print(f"[DEBUG] 查询 MR 异常: {e}")
-                    return None
-
-            return None
-        except Exception as e:
-            print(f"[DEBUG] _get_existing_gitlab_mr 异常: {e}")
-            return None
-
-    def _update_gitlab_mr_description(self, project_info, mr_iid, new_description):
-        """更新 GitLab MR 的描述
-
-        Returns:
-            dict: 更新结果
-        """
-        git_url = project_info.get("git_url", "")
-        token = project_info.get("gitlab_token", "")
-
-        if not git_url or not token:
-            return {"error": "Git URL 或 Token 为空"}
-
-        if "gitlab" not in git_url.lower():
-            return {"error": "不是 GitLab 项目"}
-
-        try:
-            host, path_part = self._parse_gitlab_url(git_url)
-            base_url = f"https://{host}/api/v4"
-
-            # 尝试不同的编码方式
-            encoding_attempts = [
-                urllib.parse.quote(path_part, safe=""),
-                urllib.parse.quote(path_part, safe="/"),
-            ]
-
-            for encoded_path in encoding_attempts:
-                # 更新 MR: PUT /projects/:id/merge_requests/:iid
-                api_url = f"{base_url}/projects/{encoded_path}/merge_requests/{mr_iid}"
-
-                data = {
-                    "description": new_description,
-                }
-
-                req = urllib.request.Request(
-                    api_url,
-                    data=json.dumps(data).encode("utf-8"),
-                    headers={
-                        "Content-Type": "application/json",
-                        "PRIVATE-TOKEN": token,
-                    },
-                    method="PUT",
-                )
-
-                try:
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        result = json.loads(response.read().decode("utf-8"))
-                        print(f"[DEBUG] MR 描述更新成功: {result.get('web_url')}")
-                        return {
-                            "success": True,
-                            "mr_url": result.get("web_url", ""),
-                        }
-                except urllib.error.HTTPError as e:
-                    if e.code == 404:
-                        continue
-                    else:
-                        error_body = e.read().decode("utf-8")
-                        return {"error": f"HTTP错误 {e.code}: {error_body}"}
-                except Exception as e:
-                    return {"error": f"更新失败: {str(e)}"}
-
-            return {"error": "无法找到项目"}
-        except Exception as e:
-            return {"error": f"_update_gitlab_mr_description 异常: {str(e)}"}
-
-
-class MergeRequestDialog(QDialog):
-    """Merge Request对话框"""
+class MergeRequestDialog(BottomSheetDialog):
+    """Merge Request对话框 - Bottom Sheet 风格（卡片式布局）"""
 
     def __init__(self, pods_info, parent=None, config=None, main_project_info=None):
-        super().__init__(parent)
-
-        # 将主工程信息添加到pods_info中，使用实际项目名
+        # 将主工程信息添加到pods_info中
         if main_project_info:
             self.pods_info = pods_info.copy()
-            project_name = main_project_info.get("name", "未知")
+            project_name = main_project_info.get("name", "主工程")
             self.pods_info[project_name] = main_project_info
         else:
             self.pods_info = pods_info
 
         self.parent_manager = parent
         self.config = config or {}
-        self.initUI()
+        self.mr_configs = {}
+        self.mr_worker = None
+        self.loading_widget = None
+        self.pod_cards = []
+
+        super().__init__(parent, title="创建 Merge Request", max_height_ratio=0.85)
+
+        self._build_content()
+        self._apply_content_styles()
         self.load_tokens_from_config()
+        self.load_pods_info()
+        self.setup_sheet_ui()
+
+    def _build_content(self):
+        """构建内容区域"""
+        # Token 配置区域
+        token_section = QFrame()
+        token_section.setObjectName("tokenSection")
+        token_section.setStyleSheet(f"""
+            QFrame#tokenSection {{
+                background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 12px;
+                padding: 16px;
+            }}
+        """)
+
+        token_layout = QVBoxLayout(token_section)
+        token_layout.setSpacing(12)
+
+        token_title = QLabel("访问令牌配置")
+        token_title.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 14px;
+                font-weight: 600;
+                background: transparent;
+            }}
+        """)
+        token_layout.addWidget(token_title)
+
+        # GitLab Token
+        gitlab_row = QHBoxLayout()
+        gitlab_row.setSpacing(12)
+
+        gitlab_label = QLabel("GitLab Token:")
+        gitlab_label.setFixedWidth(100)
+        gitlab_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
+        )
+        gitlab_row.addWidget(gitlab_label)
+
+        self.gitlab_token_input = QLineEdit()
+        self.gitlab_token_input.setEchoMode(QLineEdit.Password)
+        self.gitlab_token_input.setPlaceholderText("输入 GitLab 访问令牌")
+        self.gitlab_token_input.setStyleSheet(Styles.LINE_EDIT)
+        gitlab_row.addWidget(self.gitlab_token_input)
+
+        token_layout.addLayout(gitlab_row)
+
+        # GitHub Token
+        github_row = QHBoxLayout()
+        github_row.setSpacing(12)
+
+        github_label = QLabel("GitHub Token:")
+        github_label.setFixedWidth(100)
+        github_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
+        )
+        github_row.addWidget(github_label)
+
+        self.github_token_input = QLineEdit()
+        self.github_token_input.setEchoMode(QLineEdit.Password)
+        self.github_token_input.setPlaceholderText("输入 GitHub 访问令牌")
+        self.github_token_input.setStyleSheet(Styles.LINE_EDIT)
+        github_row.addWidget(self.github_token_input)
+
+        token_layout.addLayout(github_row)
+
+        self.content_layout.addWidget(token_section)
+
+        # 描述
+        desc_label = QLabel("为每个项目配置 MR 信息")
+        desc_label.setStyleSheet(
+            f"color: {Colors.TEXT_MUTED}; font-size: 12px; background: transparent; border: none; margin-top: 8px;"
+        )
+        self.content_layout.addWidget(desc_label)
+
+        # 滚动区域
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                border: none;
+                background: transparent;
+                width: 8px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba(255, 255, 255, 0.2);
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgba(255, 255, 255, 0.3);
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+        """)
+
+        # 卡片容器
+        self.cards_container = QWidget()
+        self.cards_container.setStyleSheet("background: transparent; border: none;")
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 12, 0)
+        self.cards_layout.setSpacing(12)
+
+        self.scroll_area.setWidget(self.cards_container)
+        self.content_layout.addWidget(self.scroll_area, 1)
+
+        # 修改按钮文本
+        self.confirm_btn.setText("提交 MR")
+        self.confirm_btn.clicked.disconnect()
+        self.confirm_btn.clicked.connect(self.submit_mrs)
+
+    def _apply_content_styles(self):
+        """应用样式"""
+        self.setStyleSheet(f"""
+            QComboBox QAbstractItemView {{
+                background-color: #1a1a2e;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 6px;
+                padding: 4px;
+                outline: none;
+            }}
+            QComboBox QAbstractItemView::item {{
+                padding: 6px 10px;
+                min-height: 24px;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background-color: rgba(102, 126, 234, 0.4);
+                color: {Colors.TEXT_PRIMARY};
+            }}
+        """)
+
+    def _create_pod_card(self, pod_name, info):
+        """创建单个 Pod/项目 卡片"""
+        card = QFrame()
+        card.setObjectName("mrCard")
+        card.setStyleSheet(f"""
+            QFrame#mrCard {{
+                background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 12px;
+            }}
+        """)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 12, 16, 12)
+        card_layout.setSpacing(10)
+
+        # Header: 项目名称 + 当前分支标签
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
+
+        name_label = QLabel(pod_name)
+        name_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 14px;
+                font-weight: 600;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        header_layout.addWidget(name_label)
+
+        # 是否为主工程标记
+        if info.get("is_main_project", False):
+            main_badge = QLabel("主工程")
+            main_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #fbbf24;
+                    font-size: 11px;
+                    background-color: rgba(251, 191, 36, 0.15);
+                    border: 1px solid rgba(251, 191, 36, 0.25);
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                }}
+            """)
+            header_layout.addWidget(main_badge)
+
+        # 当前分支标签
+        current_branch = info.get("current_branch", "")
+        if current_branch and current_branch != "未知":
+            branch_badge = QLabel(current_branch)
+            branch_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #a5b4fc;
+                    font-size: 11px;
+                    background-color: rgba(99, 102, 241, 0.15);
+                    border: 1px solid rgba(99, 102, 241, 0.25);
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                }}
+            """)
+            header_layout.addWidget(branch_badge)
+
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        # Git URL
+        if "error" not in info:
+            git_url = info.get("git_url", "")
+            url_label = QLabel(git_url)
+            url_label.setStyleSheet(f"""
+                QLabel {{
+                    color: {Colors.TEXT_MUTED};
+                    font-size: 10px;
+                    background: transparent;
+                    border: none;
+                }}
+            """)
+            card_layout.addWidget(url_label)
+
+        # 错误信息
+        if "error" in info:
+            error_label = QLabel(f"❌ {info['error']}")
+            error_label.setStyleSheet(f"""
+                QLabel {{
+                    color: #f87171;
+                    font-size: 12px;
+                    background: transparent;
+                    border: none;
+                }}
+            """)
+            card_layout.addWidget(error_label)
+            return card
+
+        # 源分支选择
+        source_row = QHBoxLayout()
+        source_row.setSpacing(12)
+
+        source_label = QLabel("源分支:")
+        source_label.setFixedWidth(65)
+        source_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
+        )
+        source_row.addWidget(source_label)
+
+        remote_branches = info.get("remote_branches", [])
+        podfile_branch = info.get("podfile_branch", "")
+        is_main_project = info.get("is_main_project", False)
+
+        source_combo = CustomDropdown()
+        source_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # 确定默认源分支
+        if is_main_project:
+            default_source = current_branch
+        else:
+            default_source = podfile_branch if podfile_branch else current_branch
+
+        # 添加分支选项，默认源分支放在第一位
+        source_branches = []
+        if default_source:
+            source_branches.append(default_source)
+
+        # 添加当前分支（如果不同于默认）
+        if current_branch and current_branch != default_source:
+            source_branches.append(current_branch)
+
+        # 添加其他远程分支
+        for branch in remote_branches:
+            if branch != default_source and branch != current_branch:
+                source_branches.append(branch)
+
+        if source_branches:
+            source_combo.addItems(source_branches)
+            # 默认选择第一个（即默认源分支）
+            source_combo.setCurrentText(source_branches[0])
+        else:
+            source_combo.addItem(current_branch or "未知")
+            source_combo.setEnabled(False)
+
+        source_combo.currentTextChanged.connect(
+            lambda text, name=pod_name: self.on_source_branch_changed(name, text)
+        )
+        source_row.addWidget(source_combo)
+        card_layout.addLayout(source_row)
+
+        # 目标分支选择
+        target_row = QHBoxLayout()
+        target_row.setSpacing(12)
+
+        target_label = QLabel("目标分支:")
+        target_label.setFixedWidth(65)
+        target_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
+        )
+        target_row.addWidget(target_label)
+
+        target_combo = CustomDropdown()
+        target_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # 添加常用目标分支（去掉 origin/ 前缀）
+        common_targets = ["master", "main", "develop", "release"]
+        target_branches = []
+
+        for target in common_targets:
+            if target in remote_branches:
+                target_branches.append(target)
+            elif f"origin/{target}" in remote_branches:
+                target_branches.append(target)
+
+        # 添加其他远程分支（去掉 origin/ 前缀）
+        for branch in remote_branches:
+            branch_name = (
+                branch.replace("origin/", "")
+                if branch.startswith("origin/")
+                else branch
+            )
+            if branch_name not in target_branches:
+                target_branches.append(branch_name)
+
+        if target_branches:
+            target_combo.addItems(target_branches)
+            # 默认选择 master 或 main
+            if "master" in target_branches:
+                target_combo.setCurrentText("master")
+            elif "main" in target_branches:
+                target_combo.setCurrentText("main")
+            elif "develop" in target_branches:
+                target_combo.setCurrentText("develop")
+            else:
+                target_combo.setCurrentText(target_branches[0])
+        else:
+            target_combo.addItem("master")
+
+        target_combo.currentTextChanged.connect(
+            lambda text, name=pod_name: self.on_target_branch_changed(name, text)
+        )
+        target_row.addWidget(target_combo)
+        card_layout.addLayout(target_row)
+
+        # MR 标题
+        title_row = QHBoxLayout()
+        title_row.setSpacing(12)
+
+        title_label = QLabel("MR 标题:")
+        title_label.setFixedWidth(65)
+        title_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
+        )
+        title_row.addWidget(title_label)
+
+        # 生成默认标题（使用默认源分支）
+        default_source_for_title = podfile_branch if podfile_branch else current_branch
+        default_title = f"Merge {default_source_for_title} into master"
+
+        title_input = QLineEdit()
+        title_input.setText(default_title)
+        title_input.setStyleSheet(Styles.LINE_EDIT)
+        title_input.textChanged.connect(
+            lambda text, name=pod_name: self.on_title_changed(name, text)
+        )
+        title_row.addWidget(title_input)
+        card_layout.addLayout(title_row)
+
+        # MR 描述
+        desc_row = QHBoxLayout()
+        desc_row.setSpacing(12)
+
+        desc_label = QLabel("MR 描述:")
+        desc_label.setFixedWidth(65)
+        desc_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
+        )
+        desc_row.addWidget(desc_label)
+
+        desc_input = QLineEdit()
+        desc_input.setPlaceholderText("简要描述此次合并...")
+        desc_input.setStyleSheet(Styles.LINE_EDIT)
+        desc_input.textChanged.connect(
+            lambda text, name=pod_name: self.on_description_changed(name, text)
+        )
+        desc_row.addWidget(desc_input)
+        card_layout.addLayout(desc_row)
+
+        # 保存卡片组件引用
+        self.pod_cards.append(
+            {
+                "card": card,
+                "pod_name": pod_name,
+                "source_combo": source_combo,
+                "target_combo": target_combo,
+                "title_input": title_input,
+                "desc_input": desc_input,
+            }
+        )
+
+        # 初始化配置
+        self.mr_configs[pod_name] = {
+            "source_branch": source_combo.currentText(),
+            "target_branch": target_combo.currentText(),
+            "title": default_title,
+            "description": "",
+        }
+
+        return card
 
     def load_tokens_from_config(self):
         """从配置加载Token"""
-        # 从配置文件重新加载，确保使用最新的token
         config_path = os.path.expanduser("~/.podpilot_config.json")
         try:
             if os.path.exists(config_path):
@@ -1059,31 +1032,72 @@ class MergeRequestDialog(QDialog):
         if github_token:
             self.github_token_input.setText(github_token)
 
+    def load_pods_info(self):
+        """加载Pod信息，创建卡片"""
+        # 排序：主工程优先，其他按名称排序
+        sorted_items = sorted(
+            self.pods_info.items(),
+            key=lambda x: (0 if x[1].get("is_main_project", False) else 1, x[0]),
+        )
+
+        for pod_name, info in sorted_items:
+            card = self._create_pod_card(pod_name, info)
+            self.cards_layout.addWidget(card)
+
+        # 添加弹性空间
+        self.cards_layout.addStretch()
+
+    def on_source_branch_changed(self, pod_name, branch):
+        """源分支改变"""
+        if pod_name not in self.mr_configs:
+            self.mr_configs[pod_name] = {}
+        self.mr_configs[pod_name]["source_branch"] = branch
+
+    def on_target_branch_changed(self, pod_name, branch):
+        """目标分支改变"""
+        if pod_name not in self.mr_configs:
+            self.mr_configs[pod_name] = {}
+        self.mr_configs[pod_name]["target_branch"] = branch
+
+    def on_title_changed(self, pod_name, title):
+        """标题改变"""
+        if pod_name not in self.mr_configs:
+            self.mr_configs[pod_name] = {}
+        self.mr_configs[pod_name]["title"] = title
+
+    def on_description_changed(self, pod_name, desc):
+        """描述改变"""
+        if pod_name not in self.mr_configs:
+            self.mr_configs[pod_name] = {}
+        self.mr_configs[pod_name]["description"] = desc
+
     def submit_mrs(self):
         """提交MR"""
         gitlab_token = self.gitlab_token_input.text().strip()
         github_token = self.github_token_input.text().strip()
 
         if not gitlab_token and not github_token:
-            QMessageBox.warning(self, "警告", "请输入至少一个访问令牌")
+            ModernDialog.warning(self, "警告", "请输入至少一个访问令牌")
             return
 
         # 收集所有Pod和主工程的MR信息
         mr_info = {}
-        for row in range(self.table.rowCount()):
-            pod_name = self.table.item(row, 0).text()
-            source_branch_combo = self.table.cellWidget(row, 1)
-            target_branch_combo = self.table.cellWidget(row, 2)
-            source_branch = source_branch_combo.currentText()
-            target_branch = target_branch_combo.currentText()
-            title = self.table.item(row, 3).text()
-            description = self.table.item(row, 4).text()
+        for pod_name, info in self.pods_info.items():
+            if "error" in info:
+                continue
 
-            if not target_branch.strip():
-                QMessageBox.warning(self, "警告", f"{pod_name} 的目标分支不能为空")
+            config = self.mr_configs.get(pod_name, {})
+            source_branch = config.get("source_branch", "")
+            target_branch = config.get("target_branch", "")
+            title = config.get("title", "")
+            description = config.get("description", "")
+
+            if not source_branch or not target_branch:
+                ModernDialog.warning(
+                    self, "警告", f"{pod_name} 的源分支或目标分支不能为空"
+                )
                 return
 
-            info = self.pods_info.get(pod_name, {})
             mr_info[pod_name] = {
                 "git_url": info.get("git_url", ""),
                 "source_branch": source_branch,
@@ -1096,40 +1110,43 @@ class MergeRequestDialog(QDialog):
             }
 
         # 确认提交
-        reply = QMessageBox.question(
+        reply = ModernDialog.question(
             self,
             "确认提交",
             f"将为 {len(mr_info)} 个项目创建MR，是否继续？",
-            QMessageBox.Yes | QMessageBox.No,
+            ModernDialog.Yes | ModernDialog.No,
         )
-        if reply != QMessageBox.Yes:
+        if reply != ModernDialog.Yes:
             return
 
-        # 创建loading对话框
-        loading_dialog = QDialog(self)
-        loading_dialog.setWindowTitle("提交中")
-        loading_dialog.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint)
+        # 显示loading对话框
+        loading_dialog = QWidget(self)
         loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet(
-            """
-            QDialog {
-                background-color: #f5f5f7;
+        loading_dialog.setStyleSheet(f"""
+            QWidget {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {Colors.BG_GRADIENT_START},
+                    stop:0.5 {Colors.BG_GRADIENT_MID},
+                    stop:1 {Colors.BG_GRADIENT_END}
+                );
                 border-radius: 12px;
-            }
-        """
-        )
+            }}
+        """)
 
         loading_layout = QVBoxLayout()
         loading_layout.setContentsMargins(20, 20, 20, 20)
 
-        loading_label = QLabel("正在提交MR...")
-        loading_label.setAlignment(Qt.AlignCenter)
-        loading_layout.addWidget(loading_label)
+        self.loading_widget = LoadingWidget("提交中...")
+        loading_layout.addWidget(self.loading_widget)
 
         loading_dialog.setLayout(loading_layout)
         loading_dialog.show()
 
-        # 创建异步提交工作线程并保存为实例变量以防止被垃圾回收
+        self.loading_widget.start_animation()
+        QApplication.processEvents()
+
+        # 创建异步提交工作线程
         try:
             self.mr_worker = MRRequestWorker(mr_info)
             self.mr_worker.finished.connect(
@@ -1139,16 +1156,23 @@ class MergeRequestDialog(QDialog):
         except Exception as e:
             if loading_dialog:
                 loading_dialog.close()
-            QMessageBox.critical(self, "错误", f"无法创建MR工作线程: {str(e)}")
+            ModernDialog.error(self, "错误", f"无法创建MR工作线程: {str(e)}")
 
     def _on_mr_finished(self, result, loading_dialog):
         """处理MR提交完成"""
         # 清理线程引用
-        if hasattr(self, "mr_worker"):
-            self.mr_worker = None
+        if hasattr(self, "mr_worker") and self.mr_worker:
+            try:
+                self.mr_worker.wait()
+            except RuntimeError:
+                pass
+            finally:
+                self.mr_worker = None
 
-        if loading_dialog is not None:
-            loading_dialog.close()
+        if hasattr(self, "loading_widget"):
+            self.loading_widget.stop_animation()
+
+        loading_dialog.close()
 
         success_count = result.get("success_count", 0)
         fail_count = result.get("fail_count", 0)
@@ -1163,14 +1187,20 @@ class MergeRequestDialog(QDialog):
                     msg += f"❌ {pod_name}: {info['error']}\n"
                 else:
                     platform = info.get("platform", "")
+                    action = info.get("action", "created")
+                    action_text = "已更新" if action == "updated" else "已创建"
                     if platform == "GitLab":
                         mr_url = info.get("mr_url", "")
-                        msg += f"✅ {pod_name}: {mr_url}\n"
+                        msg += f"✅ {pod_name} ({action_text}): {mr_url}\n"
                     elif platform == "GitHub":
                         pr_url = info.get("pr_url", "")
-                        msg += f"✅ {pod_name}: {pr_url}\n"
+                        msg += f"✅ {pod_name} ({action_text}): {pr_url}\n"
 
-        QMessageBox.information(self, "完成", msg)
+        if fail_count == 0:
+            ModernDialog.information(self, "成功", msg)
+            self.accept()
+        else:
+            ModernDialog.warning(self, "部分成功", msg)
 
         # 记录日志
         if self.parent_manager:
@@ -1178,291 +1208,23 @@ class MergeRequestDialog(QDialog):
                 f"批量创建MR完成: 成功 {success_count}, 失败 {fail_count}"
             )
 
-        self.accept()
-
     def closeEvent(self, event):
         """处理对话框关闭事件，确保线程安全退出"""
         if hasattr(self, "mr_worker") and self.mr_worker:
             try:
                 if self.mr_worker.isRunning():
-                    reply = QMessageBox.question(
+                    reply = ModernDialog.question(
                         self,
                         "确认",
                         "MR提交正在进行中，确定要取消吗？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
+                        ModernDialog.Yes | ModernDialog.No,
+                        ModernDialog.No,
                     )
-                    if reply == QMessageBox.No:
+                    if reply == ModernDialog.No:
                         event.ignore()
-                        return
-                    # 等待线程完成
-                    self.mr_worker.quit()
-                    self.mr_worker.wait(2000)  # 等待最多2秒
-            except RuntimeError:
-                pass
-        event.accept()
-
-    def reject(self):
-        """处理取消/关闭操作，确保线程安全退出"""
-        if hasattr(self, "mr_worker") and self.mr_worker:
-            try:
-                if self.mr_worker.isRunning():
-                    reply = QMessageBox.question(
-                        self,
-                        "确认",
-                        "MR提交正在进行中，确定要取消吗？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
-                    )
-                    if reply == QMessageBox.No:
                         return
                     self.mr_worker.quit()
                     self.mr_worker.wait(2000)
             except RuntimeError:
                 pass
-        super().reject()
-
-    def initUI(self):
-        """初始化UI"""
-        self.setWindowTitle("创建 Merge Request")
-        self.setMinimumSize(900, 600)
-        self.resize(1000, 700)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-
-        # Token 配置区域
-        token_group = QGroupBox("访问令牌配置")
-        token_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 14px;
-                font-weight: bold;
-                border: 1px solid #e5e5e5;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-        """)
-        token_layout = QGridLayout()
-        token_layout.setSpacing(10)
-
-        # GitLab Token
-        gitlab_label = QLabel("GitLab Token:")
-        self.gitlab_token_input = QLineEdit()
-        self.gitlab_token_input.setEchoMode(QLineEdit.Password)
-        self.gitlab_token_input.setPlaceholderText("输入 GitLab 访问令牌")
-        token_layout.addWidget(gitlab_label, 0, 0)
-        token_layout.addWidget(self.gitlab_token_input, 0, 1)
-
-        # GitHub Token
-        github_label = QLabel("GitHub Token:")
-        self.github_token_input = QLineEdit()
-        self.github_token_input.setEchoMode(QLineEdit.Password)
-        self.github_token_input.setPlaceholderText("输入 GitHub 访问令牌")
-        token_layout.addWidget(github_label, 1, 0)
-        token_layout.addWidget(self.github_token_input, 1, 1)
-
-        token_group.setLayout(token_layout)
-        layout.addWidget(token_group)
-
-        # MR 信息表格
-        table_group = QGroupBox("Merge Request 信息")
-        table_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 14px;
-                font-weight: bold;
-                border: 1px solid #e5e5e5;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-        """)
-        table_layout = QVBoxLayout()
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(
-            ["项目名称", "源分支", "目标分支", "标题", "描述"]
-        )
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeToContents
-        )
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setAlternatingRowColors(True)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                border: none;
-                background-color: #ffffff;
-                gridline-color: #e5e5e5;
-            }
-            QTableWidget::item {
-                padding: 8px;
-            }
-            QHeaderView::section {
-                background-color: #f8f9fa;
-                padding: 8px;
-                border: none;
-                border-bottom: 1px solid #e5e5e5;
-                font-weight: bold;
-            }
-        """)
-
-        # 填充表格数据
-        self._populate_table()
-
-        table_layout.addWidget(self.table)
-        table_group.setLayout(table_layout)
-        layout.addWidget(table_group)
-
-        # 底部按钮
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #666;
-                border: 1px solid #e5e5e5;
-                border-radius: 6px;
-                padding: 10px 24px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.02);
-            }
-        """)
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
-
-        submit_btn = QPushButton("提交 MR")
-        submit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 24px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-        """)
-        submit_btn.clicked.connect(self.submit_mrs)
-        button_layout.addWidget(submit_btn)
-
-        layout.addLayout(button_layout)
-
-    def _populate_table(self):
-        """填充表格数据"""
-        self.table.setRowCount(len(self.pods_info))
-
-        # 设置行高以便下拉框完整显示
-        self.table.verticalHeader().setDefaultSectionSize(40)
-
-        # 对项目进行排序：主工程优先，其他按名称排序
-        sorted_items = sorted(
-            self.pods_info.items(),
-            key=lambda x: (0 if x[1].get("is_main_project", False) else 1, x[0]),
-        )
-
-        row = 0
-        for pod_name, info in sorted_items:
-            if "error" in info:
-                continue
-
-            is_main_project = info.get("is_main_project", False)
-
-            # 项目名称
-            name_item = QTableWidgetItem(pod_name)
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self.table.setItem(row, 0, name_item)
-
-            # 源分支下拉框
-            source_combo = QComboBox()
-            source_combo.setMinimumHeight(32)
-            remote_branches = info.get("remote_branches", [])
-            current_branch = info.get("current_branch", "")
-            podfile_branch = info.get("podfile_branch", "")
-
-            # 确定默认源分支：
-            # - 主工程：使用当前分支
-            # - Pod库：优先使用 podfile_branch，否则使用当前分支
-            if is_main_project:
-                default_source = current_branch
-            else:
-                default_source = podfile_branch if podfile_branch else current_branch
-
-            # 添加分支选项，默认源分支放在第一位
-            if default_source:
-                source_combo.addItem(default_source)
-            # 添加当前分支（如果不同于默认）
-            if current_branch and current_branch != default_source:
-                source_combo.addItem(current_branch)
-            # 添加其他远程分支
-            for branch in remote_branches:
-                if branch != default_source and branch != current_branch:
-                    source_combo.addItem(branch)
-
-            self.table.setCellWidget(row, 1, source_combo)
-
-            # 目标分支下拉框
-            target_combo = QComboBox()
-            target_combo.setMinimumHeight(32)
-            target_combo.setEditable(True)  # 允许手动输入
-
-            # 添加常用目标分支
-            common_targets = ["master", "main", "develop", "release"]
-            for target in common_targets:
-                if target in remote_branches:
-                    target_combo.addItem(target)
-
-            # 添加其他远程分支
-            for branch in remote_branches:
-                if branch not in common_targets:
-                    target_combo.addItem(branch)
-
-            # 默认选择 master 或 main
-            if "master" in remote_branches:
-                target_combo.setCurrentText("master")
-            elif "main" in remote_branches:
-                target_combo.setCurrentText("main")
-            elif "develop" in remote_branches:
-                target_combo.setCurrentText("develop")
-
-            self.table.setCellWidget(row, 2, target_combo)
-
-            # 标题 - 使用实际的默认源分支
-            default_title = f"Merge {default_source} into target"
-            title_item = QTableWidgetItem(default_title)
-            self.table.setItem(row, 3, title_item)
-
-            # 描述 - 默认为最近3次commit信息
-            recent_commits = info.get("recent_commits", [])
-            if recent_commits:
-                desc_text = "\n".join([f"- {commit}" for commit in recent_commits])
-            else:
-                desc_text = ""
-            desc_item = QTableWidgetItem(desc_text)
-            self.table.setItem(row, 4, desc_item)
-
-            # 设置当前行高度
-            self.table.setRowHeight(row, 40)
-
-            row += 1
-
-        # 调整实际行数
-        self.table.setRowCount(row)
+        super().closeEvent(event)

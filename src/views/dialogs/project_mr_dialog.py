@@ -26,12 +26,14 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QCursor
 
+from src.styles import Colors, Styles, GlassmorphismStyle
+
 
 class ProjectMRLoader(QThread):
     """异步加载项目的 MR 列表"""
 
-    finished = pyqtSignal(str, list)  # project_name, mr_list
-    error_occurred = pyqtSignal(str, str)  # project_name, error_msg
+    finished = pyqtSignal(str, list)
+    error_occurred = pyqtSignal(str, str)
 
     def __init__(self, project_name, git_url, gitlab_token):
         super().__init__()
@@ -41,17 +43,14 @@ class ProjectMRLoader(QThread):
 
     def run(self):
         try:
-            # 解析 GitLab 主机和项目路径
             host, path_part = self._parse_git_url(self.git_url)
 
             if not host or not path_part:
                 self.error_occurred.emit(self.project_name, "无法解析 Git URL")
                 return
 
-            # URL 编码项目路径
             encoded_path = urllib.parse.quote(path_part, safe="")
 
-            # GitLab API: 获取项目的待合并 MR
             api_url = f"https://{host}/api/v4/projects/{encoded_path}/merge_requests?state=opened&per_page=100"
 
             req = urllib.request.Request(
@@ -78,13 +77,11 @@ class ProjectMRLoader(QThread):
             return None, None
 
         if git_url.startswith("git@"):
-            # 格式: git@gitlab.example.com:group/project.git
             parts = git_url.replace("git@", "").split(":")
             host = parts[0]
             path_part = parts[1] if len(parts) > 1 else ""
             path_part = path_part.replace(".git", "")
         else:
-            # 格式: https://gitlab.example.com/group/project.git
             from urllib.parse import urlparse
 
             parsed = urlparse(git_url)
@@ -105,67 +102,64 @@ class MRCardWidget(QFrame):
 
     def initUI(self):
         self.setFrameShape(QFrame.StyledPanel)
-        self.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border: 1px solid #e5e5e5;
-                border-radius: 8px;
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {Colors.SURFACE};
+                border: 1px solid {Colors.SURFACE_BORDER};
+                border-radius: 12px;
                 padding: 10px;
-            }
-            QFrame:hover {
-                background-color: #f8f9fa;
-                border-color: #007aff;
-            }
+            }}
+            QFrame:hover {{
+                background-color: {Colors.SURFACE_HOVER};
+                border-color: rgba(88, 86, 214, 0.5);
+            }}
         """)
         self.setCursor(QCursor(Qt.PointingHandCursor))
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
 
-        # MR 标题
         title = self.mr_data.get("title", "无标题")
         title_label = QLabel(title)
-        title_label.setStyleSheet("""
-            QLabel {
+        title_label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 13px;
                 font-weight: bold;
-                color: #333;
+                color: {Colors.TEXT_PRIMARY};
                 border: none;
                 background: transparent;
-            }
+            }}
         """)
         title_label.setWordWrap(True)
         layout.addWidget(title_label)
 
-        # 分支信息
         source_branch = self.mr_data.get("source_branch", "")
         target_branch = self.mr_data.get("target_branch", "")
-        branch_label = QLabel(f"🔀 {source_branch} → {target_branch}")
-        branch_label.setStyleSheet("""
-            QLabel {
+        branch_label = QLabel(f"{source_branch} → {target_branch}")
+        branch_label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 11px;
-                color: #007aff;
+                color: {Colors.MR};
                 border: none;
                 background: transparent;
-            }
+            }}
         """)
         layout.addWidget(branch_label)
 
-        # 作者和时间
         author = self.mr_data.get("author", {}).get("name", "未知")
         created_at = self.mr_data.get("created_at", "")
         if created_at:
             created_at = created_at.replace("T", " ").split(".")[0]
 
-        info_label = QLabel(f"👤 {author}  🕐 {created_at}")
-        info_label.setStyleSheet("""
-            QLabel {
+        info_label = QLabel(f"{author}  |  {created_at}")
+        info_label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 10px;
-                color: #999;
+                color: {Colors.TEXT_MUTED};
                 border: none;
                 background: transparent;
-            }
+            }}
         """)
         layout.addWidget(info_label)
 
@@ -179,94 +173,92 @@ class ProjectMRDialog(QDialog):
     """工程相关 MR 对话框"""
 
     def __init__(self, project_info, pods_info, gitlab_token, parent=None):
-        """
-        Args:
-            project_info: 主工程信息 {"name": "xxx", "git_url": "xxx"}
-            pods_info: Pod 信息字典 {"pod_name": {"git_url": "xxx", "local_path": "xxx"}}
-            gitlab_token: GitLab Token
-        """
         super().__init__(parent)
+        self._titlebar_setup = False
         self.project_info = project_info or {}
         self.pods_info = pods_info or {}
         self.gitlab_token = gitlab_token
         self.mr_loaders = []
-        self.project_mrs = {}  # {project_name: [mr_list]}
-        self.project_errors = {}  # {project_name: error_msg}
+        self.project_mrs = {}
+        self.project_errors = {}
         self.initUI()
         self.load_all_mrs()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._titlebar_setup:
+            GlassmorphismStyle.setup_transparent_titlebar(self)
+            self._titlebar_setup = True
 
     def initUI(self):
         self.setWindowTitle("当前工程 Merge Requests")
         self.setMinimumSize(900, 600)
         self.resize(1000, 700)
 
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {Colors.BG_GRADIENT_START},
+                    stop:0.5 {Colors.BG_GRADIENT_MID},
+                    stop:1 {Colors.BG_GRADIENT_END}
+                );
+            }}
+        """)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 标题栏
         title_bar = QFrame()
         title_bar.setFixedHeight(56)
-        title_bar.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border-bottom: 1px solid #e5e5e5;
-            }
+        title_bar.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(0, 0, 0, 0.2);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }}
         """)
 
         title_layout = QHBoxLayout(title_bar)
         title_layout.setContentsMargins(20, 0, 20, 0)
 
         title_label = QLabel("当前工程 Merge Requests")
-        title_label.setStyleSheet("""
-            QLabel {
+        title_label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 18px;
                 font-weight: bold;
-                color: #333;
+                color: {Colors.TEXT_PRIMARY};
                 border: none;
-            }
+            }}
         """)
         title_layout.addWidget(title_label)
         title_layout.addStretch()
 
-        # 刷新按钮
         self.refresh_btn = QPushButton("刷新")
-        self.refresh_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """)
+        self.refresh_btn.setStyleSheet(Styles.BUTTON)
         self.refresh_btn.clicked.connect(self.load_all_mrs)
         title_layout.addWidget(self.refresh_btn)
 
         layout.addWidget(title_bar)
 
-        # 主内容区域 - 左右分栏
         splitter = QSplitter(Qt.Horizontal)
-        splitter.setStyleSheet("""
-            QSplitter {
-                background-color: #f5f5f7;
-            }
-            QSplitter::handle {
-                background-color: #e5e5e5;
+        splitter.setStyleSheet(f"""
+            QSplitter {{
+                background: transparent;
+            }}
+            QSplitter::handle {{
+                background-color: rgba(255, 255, 255, 0.1);
                 width: 1px;
-            }
+            }}
         """)
 
-        # 左侧：项目列表
         left_panel = QFrame()
-        left_panel.setStyleSheet("background-color: #ffffff;")
+        left_panel.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(0, 0, 0, 0.15);
+                border: none;
+            }}
+        """)
         left_panel.setMinimumWidth(250)
         left_panel.setMaximumWidth(350)
 
@@ -275,60 +267,60 @@ class ProjectMRDialog(QDialog):
         left_layout.setSpacing(0)
 
         left_header = QLabel("项目列表")
-        left_header.setStyleSheet("""
-            QLabel {
+        left_header.setStyleSheet(f"""
+            QLabel {{
                 font-size: 14px;
                 font-weight: bold;
-                color: #333;
+                color: {Colors.TEXT_PRIMARY};
                 padding: 12px 16px;
-                background-color: #f8f9fa;
-                border-bottom: 1px solid #e5e5e5;
-            }
+                background-color: rgba(0, 0, 0, 0.2);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }}
         """)
         left_layout.addWidget(left_header)
 
         self.project_list = QListWidget()
-        self.project_list.setStyleSheet("""
-            QListWidget {
+        self.project_list.setStyleSheet(f"""
+            QListWidget {{
                 border: none;
-                background-color: #ffffff;
+                background-color: transparent;
                 outline: none;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 12px 16px;
-                border-bottom: 1px solid #f0f0f0;
-            }
-            QListWidget::item:selected {
-                background-color: #e8f4fd;
-                color: #007aff;
-            }
-            QListWidget::item:hover {
-                background-color: #f8f9fa;
-            }
+                color: {Colors.TEXT_PRIMARY};
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            }}
+            QListWidget::item:selected {{
+                background-color: rgba(255, 255, 255, 0.25);
+                color: {Colors.TEXT_PRIMARY};
+            }}
+            QListWidget::item:hover:!selected {{
+                background-color: rgba(255, 255, 255, 0.1);
+            }}
         """)
         self.project_list.currentItemChanged.connect(self._on_project_selected)
         left_layout.addWidget(self.project_list)
 
         splitter.addWidget(left_panel)
 
-        # 右侧：MR 列表
         right_panel = QFrame()
-        right_panel.setStyleSheet("background-color: #f5f5f7;")
+        right_panel.setStyleSheet("background: transparent;")
 
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
 
         self.right_header = QLabel("请选择左侧项目")
-        self.right_header.setStyleSheet("""
-            QLabel {
+        self.right_header.setStyleSheet(f"""
+            QLabel {{
                 font-size: 14px;
                 font-weight: bold;
-                color: #333;
+                color: {Colors.TEXT_PRIMARY};
                 padding: 12px 16px;
-                background-color: #f8f9fa;
-                border-bottom: 1px solid #e5e5e5;
-            }
+                background-color: rgba(0, 0, 0, 0.2);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }}
         """)
         right_layout.addWidget(self.right_header)
 
@@ -336,37 +328,28 @@ class ProjectMRDialog(QDialog):
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background-color: #f5f5f7;
-                border: none;
-            }
-            QScrollBar:vertical {
-                border: none;
+        scroll_area.setStyleSheet(f"""
+            QScrollArea {{
                 background: transparent;
-                width: 8px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 4px;
-            }
+                border: none;
+            }}
+            {Styles.SCROLL_BAR}
         """)
 
         self.mr_content = QWidget()
-        self.mr_content.setStyleSheet("background-color: #f5f5f7;")
+        self.mr_content.setStyleSheet("background: transparent;")
         self.mr_layout = QVBoxLayout(self.mr_content)
         self.mr_layout.setContentsMargins(16, 16, 16, 16)
         self.mr_layout.setSpacing(10)
 
-        # 初始提示
         self.placeholder_label = QLabel("请选择左侧项目查看 MR")
         self.placeholder_label.setAlignment(Qt.AlignCenter)
-        self.placeholder_label.setStyleSheet("""
-            QLabel {
+        self.placeholder_label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 14px;
-                color: #999;
+                color: {Colors.TEXT_MUTED};
                 padding: 40px;
-            }
+            }}
         """)
         self.mr_layout.addWidget(self.placeholder_label)
         self.mr_layout.addStretch()
@@ -379,14 +362,13 @@ class ProjectMRDialog(QDialog):
 
         layout.addWidget(splitter)
 
-        # 底部按钮栏
         button_bar = QFrame()
         button_bar.setFixedHeight(60)
-        button_bar.setStyleSheet("""
-            QFrame {
-                background-color: #ffffff;
-                border-top: 1px solid #e5e5e5;
-            }
+        button_bar.setStyleSheet(f"""
+            QFrame {{
+                background-color: rgba(0, 0, 0, 0.2);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }}
         """)
 
         button_layout = QHBoxLayout(button_bar)
@@ -394,19 +376,7 @@ class ProjectMRDialog(QDialog):
         button_layout.addStretch()
 
         close_btn = QPushButton("关闭")
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #666;
-                border: 1px solid #e5e5e5;
-                border-radius: 6px;
-                padding: 8px 24px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.02);
-            }
-        """)
+        close_btn.setStyleSheet(Styles.BUTTON)
         close_btn.clicked.connect(self.close)
         button_layout.addWidget(close_btn)
 
@@ -415,22 +385,19 @@ class ProjectMRDialog(QDialog):
     def load_all_mrs(self):
         """加载所有项目的 MR"""
         if not self.gitlab_token:
-            QMessageBox.warning(self, "提示", "请先在个人中心配置 GitLab Token")
+            ModernDialog.warning(self, "提示", "请先在个人中心配置 GitLab Token")
             return
 
         self.refresh_btn.setEnabled(False)
         self.refresh_btn.setText("加载中...")
 
-        # 清空数据
         self.project_mrs.clear()
         self.project_errors.clear()
         self.project_list.clear()
         self._clear_mr_list()
 
-        # 构建项目列表
         all_projects = {}
 
-        # 添加主工程
         if self.project_info and self.project_info.get("git_url"):
             project_name = self.project_info.get("name", "主工程")
             all_projects[project_name] = {
@@ -438,7 +405,6 @@ class ProjectMRDialog(QDialog):
                 "is_main": True,
             }
 
-        # 添加 Pod
         for pod_name, pod_info in self.pods_info.items():
             git_url = pod_info.get("git_url", "")
             if git_url and "gitlab" in git_url.lower():
@@ -450,13 +416,11 @@ class ProjectMRDialog(QDialog):
             self._show_placeholder("暂无可用的项目")
             return
 
-        # 初始化项目列表项
         for project_name in all_projects:
             item = QListWidgetItem(f"⏳ {project_name} (加载中...)")
             item.setData(Qt.UserRole, project_name)
             self.project_list.addItem(item)
 
-        # 启动加载
         self.pending_count = len(all_projects)
         self.mr_loaders = []
 
@@ -499,7 +463,6 @@ class ProjectMRDialog(QDialog):
             self.refresh_btn.setEnabled(True)
             self.refresh_btn.setText("刷新")
 
-            # 自动选择第一个有 MR 的项目
             for i in range(self.project_list.count()):
                 item = self.project_list.item(i)
                 project_name = item.data(Qt.UserRole)
@@ -507,7 +470,6 @@ class ProjectMRDialog(QDialog):
                     self.project_list.setCurrentItem(item)
                     return
 
-            # 如果没有 MR，选择第一个
             if self.project_list.count() > 0:
                 self.project_list.setCurrentRow(0)
 
@@ -548,12 +510,12 @@ class ProjectMRDialog(QDialog):
         """显示占位信息"""
         label = QLabel(message)
         label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("""
-            QLabel {
+        label.setStyleSheet(f"""
+            QLabel {{
                 font-size: 14px;
-                color: #999;
+                color: {Colors.TEXT_MUTED};
                 padding: 40px;
-            }
+            }}
         """)
         self.mr_layout.addWidget(label)
         self.mr_layout.addStretch()

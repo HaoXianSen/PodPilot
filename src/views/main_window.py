@@ -38,10 +38,12 @@ from src.views.dialogs.batch_tag_dialog import BatchTagDialog
 from src.views.dialogs.batch_tag_switch_dialog import BatchTagSwitchDialog
 from src.views.dialogs.branch_create_dialog import BranchCreateDialog
 from src.views.dialogs.batch_branch_dialog import BatchBranchDialog
+from src.views.dialogs.clean_cache_dialog import CleanCacheDialog
 from src.widgets.loading_widget import LoadingWidget
 from src.views.dialogs.merge_request_dialog import MergeRequestDialog, MRInfoCollector
 from src.views.dialogs.personal_center_drawer import PersonalCenterDrawer
 from src.views.dialogs.project_mr_dialog import ProjectMRDialog
+from src.components.modern_dialog import ModernDialog
 
 from src.services import (
     ConfigService,
@@ -245,15 +247,6 @@ class PodPilot(QMainWindow):
         self.one_click_tag_btn.setEnabled(False)
         btn_layout.addWidget(self.one_click_tag_btn)
 
-        self.one_click_branch_btn = QPushButton("一键Branch", left_widget)
-        self.one_click_branch_btn.setToolTip(
-            "自动筛选tag引用的Pod，批量切换到Branch模式"
-        )
-        self.one_click_branch_btn.setFixedSize(one_click_btn_w, left_btn_h)
-        self.one_click_branch_btn.clicked.connect(self.one_click_branch_mode)
-        self.one_click_branch_btn.setEnabled(False)
-        btn_layout.addWidget(self.one_click_branch_btn)
-
         self.one_click_mr_btn = QPushButton("一键MR", left_widget)
         self.one_click_mr_btn.setToolTip(
             "自动筛选branch/git引用的Pod，批量创建Merge Request"
@@ -321,31 +314,41 @@ class PodPilot(QMainWindow):
         """)
         right_layout.addWidget(self.pod_list, 1)
 
-        # Pod操作按钮 - 使用分段控制器布局
-        # 独立功能按钮 + 分隔符 + 模式切换Segmented Control
+        # Pod操作按钮 - 三组件布局：左侧功能按钮 | 模式切换 | 退出开发
         pod_btn_layout = QHBoxLayout()
-        pod_btn_layout.setSpacing(6)
+        pod_btn_layout.setSpacing(0)
+        pod_btn_layout.setContentsMargins(0, 0, 0, 0)
 
         # 统一按钮高度
         right_btn_h = 32
 
+        # === 组件1：左侧功能按钮组 ===
+        left_btn_group = QWidget()
+        left_btn_layout = QHBoxLayout(left_btn_group)
+        left_btn_layout.setContentsMargins(0, 0, 0, 0)
+        left_btn_layout.setSpacing(6)
+
         self.config_pod_btn = QPushButton("配置")
         self.config_pod_btn.setFixedSize(80, right_btn_h)
         self.config_pod_btn.clicked.connect(self.configure_selected_pod)
+        left_btn_layout.addWidget(self.config_pod_btn)
 
         self.create_tag_btn = QPushButton("创建Tag")
         self.create_tag_btn.setFixedSize(80, right_btn_h)
         self.create_tag_btn.clicked.connect(self.create_tag_for_pod)
+        left_btn_layout.addWidget(self.create_tag_btn)
 
         self.clean_cache_btn = QPushButton("清理缓存")
         self.clean_cache_btn.setFixedSize(80, right_btn_h)
         self.clean_cache_btn.clicked.connect(self.clean_pod_cache)
+        left_btn_layout.addWidget(self.clean_cache_btn)
 
-        pod_btn_layout.addWidget(self.config_pod_btn)
-        pod_btn_layout.addWidget(self.create_tag_btn)
-        pod_btn_layout.addWidget(self.clean_cache_btn)
+        pod_btn_layout.addWidget(left_btn_group)
 
-        # 分隔符
+        # 弹性空间1
+        pod_btn_layout.addStretch()
+
+        # 分隔符1
         separator1 = QFrame()
         separator1.setFrameShape(QFrame.VLine)
         separator1.setFrameShadow(QFrame.Sunken)
@@ -353,13 +356,17 @@ class PodPilot(QMainWindow):
         separator1.setFixedHeight(20)
         pod_btn_layout.addWidget(separator1)
 
-        # 模式切换 - Segmented Control（macOS 风格）
+        # 弹性空间2
+        pod_btn_layout.addStretch()
+
+        # === 组件2：模式切换 Segmented Control ===
         self.mode_btn_group = QButtonGroup(self)
         self.mode_btn_group.setExclusive(True)
 
-        # Segmented Control 容器，间距为0实现连续边框
-        segment_container = QHBoxLayout()
-        segment_container.setSpacing(0)
+        segment_container = QWidget()
+        segment_layout = QHBoxLayout(segment_container)
+        segment_layout.setContentsMargins(0, 0, 0, 0)
+        segment_layout.setSpacing(0)
 
         self.to_dev_btn = QPushButton("开发模式")
         self.to_dev_btn.setCheckable(True)
@@ -367,6 +374,7 @@ class PodPilot(QMainWindow):
         self.to_dev_btn.setStyleSheet(Styles.SEGMENT_FIRST)
         self.to_dev_btn.clicked.connect(self.switch_to_dev_mode)
         self.mode_btn_group.addButton(self.to_dev_btn)
+        segment_layout.addWidget(self.to_dev_btn)
 
         self.to_branch_btn = QPushButton("Branch模式")
         self.to_branch_btn.setCheckable(True)
@@ -374,6 +382,7 @@ class PodPilot(QMainWindow):
         self.to_branch_btn.setStyleSheet(Styles.SEGMENT_MIDDLE)
         self.to_branch_btn.clicked.connect(self.switch_to_branch_mode)
         self.mode_btn_group.addButton(self.to_branch_btn)
+        segment_layout.addWidget(self.to_branch_btn)
 
         self.to_tag_btn = QPushButton("Tag模式")
         self.to_tag_btn.setCheckable(True)
@@ -381,28 +390,39 @@ class PodPilot(QMainWindow):
         self.to_tag_btn.setStyleSheet(Styles.SEGMENT_LAST)
         self.to_tag_btn.clicked.connect(self.switch_to_tag_mode)
         self.mode_btn_group.addButton(self.to_tag_btn)
+        segment_layout.addWidget(self.to_tag_btn)
 
-        segment_container.addWidget(self.to_dev_btn)
-        segment_container.addWidget(self.to_branch_btn)
-        segment_container.addWidget(self.to_tag_btn)
-        pod_btn_layout.addLayout(segment_container)
+        pod_btn_layout.addWidget(segment_container)
 
-        # 分隔符
-        separator = QLabel("|")
-        separator.setStyleSheet(
-            "color: rgba(255, 255, 255, 0.3); font-size: 14px; margin: 0 8px;"
-        )
-        pod_btn_layout.addWidget(separator)
+        # 弹性空间3
+        pod_btn_layout.addStretch()
 
-        # 退出开发按钮 - 独立按钮
+        # 分隔符2
+        separator2 = QFrame()
+        separator2.setFrameShape(QFrame.VLine)
+        separator2.setFrameShadow(QFrame.Sunken)
+        separator2.setStyleSheet("color: rgba(255, 255, 255, 0.3);")
+        separator2.setFixedHeight(20)
+        pod_btn_layout.addWidget(separator2)
+
+        # 弹性空间4
+        pod_btn_layout.addStretch()
+
+        # === 组件3：退出开发按钮 ===
+        right_btn_group = QWidget()
+        right_btn_layout = QHBoxLayout(right_btn_group)
+        right_btn_layout.setContentsMargins(0, 0, 0, 0)
+        right_btn_layout.setSpacing(0)
+
         self.exit_dev_btn = QPushButton("退出开发")
         self.exit_dev_btn.setFixedHeight(right_btn_h)
         self.exit_dev_btn.setFixedWidth(90)
         self.exit_dev_btn.clicked.connect(self.exit_dev_mode)
         self.exit_dev_btn.setEnabled(False)
-        pod_btn_layout.addWidget(self.exit_dev_btn)
+        right_btn_layout.addWidget(self.exit_dev_btn)
 
-        pod_btn_layout.addStretch()
+        pod_btn_layout.addWidget(right_btn_group)
+
         right_layout.addLayout(pod_btn_layout)
 
         # 日志输出区域
@@ -589,18 +609,25 @@ class PodPilot(QMainWindow):
 
     def closeEvent(self, event):
         """当窗口关闭时保存配置并处理线程"""
+        # 等待Tag加载线程完成
+        if hasattr(self, "tag_loader") and self.tag_loader:
+            try:
+                if self.tag_loader.isRunning():
+                    self.tag_loader.quit()
+                    self.tag_loader.wait(2000)
+            except RuntimeError:
+                pass
+
         # 等待MR信息收集线程完成
         if hasattr(self, "mr_info_loader") and self.mr_info_loader:
             try:
                 if self.mr_info_loader.isRunning():
-                    reply = QMessageBox.question(
+                    reply = ModernDialog.question(
                         self,
                         "确认",
                         "MR信息收集正在进行中，确定要关闭吗？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
                     )
-                    if reply == QMessageBox.No:
+                    if reply == ModernDialog.No:
                         event.ignore()
                         return
                     self.mr_info_loader.quit()
@@ -645,7 +672,7 @@ class PodPilot(QMainWindow):
 
         podfile_path = os.path.join(project_dir, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "警告", f"所选目录未找到Podfile: {podfile_path}")
+            ModernDialog.warning(self, "警告", f"所选目录未找到Podfile: {podfile_path}")
             return
 
         project_name = os.path.basename(project_dir)
@@ -677,7 +704,6 @@ class PodPilot(QMainWindow):
         self.load_pods(project_dir)
 
         self.one_click_tag_btn.setEnabled(True)
-        self.one_click_branch_btn.setEnabled(True)
         self.one_click_mr_btn.setEnabled(True)
         self.view_project_mr_btn.setEnabled(True)
 
@@ -923,7 +949,7 @@ class PodPilot(QMainWindow):
     def configure_selected_pod(self):
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要配置的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要配置的Pod")
             return
 
         for item in current_items:
@@ -947,17 +973,17 @@ class PodPilot(QMainWindow):
 
     def switch_to_dev_mode(self):
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要切换的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要切换的Pod")
             return
 
         podfile_path = os.path.join(self.current_project, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "错误", "未找到Podfile")
+            ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
         selected_pod_names = [
@@ -989,7 +1015,7 @@ class PodPilot(QMainWindow):
                         )
 
                 if pod_name not in current_config:
-                    QMessageBox.warning(self, "警告", f"未配置 {pod_name} 的本地路径")
+                    ModernDialog.warning(self, "警告", f"未配置 {pod_name} 的本地路径")
                     continue
 
                 local_path = current_config[pod_name]
@@ -1011,31 +1037,28 @@ class PodPilot(QMainWindow):
                 if pod_name in selected_pod_names:
                     item.setSelected(True)
 
-            reply = QMessageBox.question(
-                self,
-                "确认",
-                "已切换到开发模式，是否执行 pod install?",
-                QMessageBox.Yes | QMessageBox.No,
+            reply = ModernDialog.question(
+                self, "确认", "已切换到开发模式，是否执行 pod install?"
             )
-            if reply == QMessageBox.Yes:
+            if reply == ModernDialog.Yes:
                 self.run_pod_install()
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"切换失败: {str(e)}")
+            ModernDialog.error(self, "错误", f"切换失败: {str(e)}")
 
     def switch_to_normal_mode(self):
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要切换的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要切换的Pod")
             return
 
         podfile_path = os.path.join(self.current_project, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "错误", "未找到Podfile")
+            ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
         try:
@@ -1069,32 +1092,31 @@ class PodPilot(QMainWindow):
 
             self.load_pods(self.current_project)
 
-            reply = QMessageBox.question(
+            reply = ModernDialog.question(
                 self,
                 "确认",
                 "已恢复为正常模式，是否执行 pod install?",
-                QMessageBox.Yes | QMessageBox.No,
             )
-            if reply == QMessageBox.Yes:
+            if reply == ModernDialog.Yes:
                 self.run_pod_install()
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"切换失败: {str(e)}")
+            ModernDialog.error(self, "错误", f"切换失败: {str(e)}")
 
     def exit_dev_mode(self):
         """退出开发模式，恢复到上次的模式"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要切换的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要切换的Pod")
             return
 
         podfile_path = os.path.join(self.current_project, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "错误", "未找到Podfile")
+            ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
         try:
@@ -1157,22 +1179,21 @@ class PodPilot(QMainWindow):
             self.load_pods(self.current_project)
 
             if restored_count > 0:
-                reply = QMessageBox.question(
+                reply = ModernDialog.question(
                     self,
                     "确认",
                     f"已退出开发模式（{restored_count}个Pod），是否执行 pod install?",
-                    QMessageBox.Yes | QMessageBox.No,
                 )
-                if reply == QMessageBox.Yes:
+                if reply == ModernDialog.Yes:
                     self.run_pod_install()
 
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"退出开发模式失败: {str(e)}")
+            ModernDialog.error(self, "错误", f"退出开发模式失败: {str(e)}")
 
     def create_tag_for_pod(self):
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要创建标签的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要创建标签的Pod")
             return
 
         current_config = self.get_current_pods_config()
@@ -1203,7 +1224,7 @@ class PodPilot(QMainWindow):
             )
 
         if not pods_info:
-            QMessageBox.warning(self, "警告", "没有可创建Tag的Pod")
+            ModernDialog.warning(self, "警告", "没有可创建Tag的Pod")
             return
 
         dialog = BatchTagDialog(pods_info, self)
@@ -1213,17 +1234,17 @@ class PodPilot(QMainWindow):
     def switch_to_branch_mode(self):
         """切换到Branch模式"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要切换的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要切换的Pod")
             return
 
         podfile_path = os.path.join(self.current_project, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "错误", "未找到Podfile")
+            ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
         current_config = self.get_current_pods_config()
@@ -1254,7 +1275,7 @@ class PodPilot(QMainWindow):
             )
 
         if not pods_info:
-            QMessageBox.warning(self, "警告", "没有可切换到Branch模式的Pod")
+            ModernDialog.warning(self, "警告", "没有可切换到Branch模式的Pod")
             return
 
         dialog = BatchBranchDialog(pods_info, podfile_path, None, self)
@@ -1265,29 +1286,28 @@ class PodPilot(QMainWindow):
                     self.log_message("批量切换到Branch模式完成")
             self.load_pods(self.current_project)
 
-            reply = QMessageBox.question(
+            reply = ModernDialog.question(
                 self,
                 "确认",
                 "已切换到Branch模式，是否执行 pod install?",
-                QMessageBox.Yes | QMessageBox.No,
             )
-            if reply == QMessageBox.Yes:
+            if reply == ModernDialog.Yes:
                 self.run_pod_install()
 
     def switch_to_tag_mode(self):
         """切换到Tag模式"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要切换的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要切换的Pod")
             return
 
         podfile_path = os.path.join(self.current_project, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "错误", "未找到Podfile")
+            ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
         # 读取Podfile内容
@@ -1295,32 +1315,29 @@ class PodPilot(QMainWindow):
             with open(podfile_path, "r") as f:
                 podfile_lines = f.readlines()
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"读取Podfile失败: {str(e)}")
+            ModernDialog.error(self, "错误", f"读取Podfile失败: {str(e)}")
             return
 
-        # 创建loading对话框
-        loading_dialog = QDialog(self)
-        loading_dialog.setWindowTitle("加载中")
-        loading_dialog.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint)
-        loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f7;
-                border-radius: 12px;
+        # 创建半透明遮罩层
+        loading_overlay = QWidget(self)
+        loading_overlay.setGeometry(0, 0, self.width(), self.height())
+        loading_overlay.setStyleSheet("""
+            QWidget {
+                background-color: rgba(0, 0, 0, 0.5);
             }
         """)
+        loading_overlay.setAttribute(Qt.WA_StyledBackground, True)
+        loading_overlay.show()
+        loading_overlay.raise_()
 
-        loading_layout = QVBoxLayout()
-        loading_layout.setContentsMargins(20, 20, 20, 20)
-
-        # 使用LoadingWidget
-        self.loading_widget = LoadingWidget("加载远程Tag...")
-        loading_layout.addWidget(self.loading_widget)
-
-        loading_dialog.setLayout(loading_layout)
-        loading_dialog.show()
-
-        # 开始动画
+        # 在遮罩层上放置LoadingWidget
+        self.loading_widget = LoadingWidget(
+            "加载远程Tag...", LoadingWidget.STYLE_SPINNER, loading_overlay
+        )
+        self.loading_widget.setGeometry(
+            (self.width() - 200) // 2, (self.height() - 120) // 2, 200, 120
+        )
+        self.loading_widget.show()
         self.loading_widget.start_animation()
 
         # 获取当前Pod配置
@@ -1332,27 +1349,34 @@ class PodPilot(QMainWindow):
         )
         self.tag_loader.finished.connect(
             lambda pods_info: self._on_tags_loaded(
-                pods_info, podfile_path, podfile_lines, loading_dialog
+                pods_info, podfile_path, podfile_lines, loading_overlay
             )
         )
 
         # 启动工作线程
         self.tag_loader.start()
 
-    def _on_tags_loaded(self, pods_info, podfile_path, podfile_lines, loading_dialog):
+    def _on_tags_loaded(self, pods_info, podfile_path, podfile_lines, loading_overlay):
         """处理Tag数据加载完成"""
         # 清理线程引用
-        if hasattr(self, "tag_loader"):
-            self.tag_loader = None
+        if hasattr(self, "tag_loader") and self.tag_loader:
+            try:
+                # 等待线程正常结束
+                self.tag_loader.wait()
+            except RuntimeError:
+                pass
+            finally:
+                self.tag_loader = None
 
         # 停止loading动画
         if hasattr(self, "loading_widget"):
             self.loading_widget.stop_animation()
 
-        loading_dialog.close()
+        # 移除遮罩层
+        loading_overlay.deleteLater()
 
         if not pods_info:
-            QMessageBox.warning(self, "警告", "没有可切换的Pod")
+            ModernDialog.warning(self, "警告", "没有可切换的Pod")
             return
 
         # 使用批量Tag切换对话框
@@ -1363,13 +1387,12 @@ class PodPilot(QMainWindow):
             self.load_pods(self.current_project)
 
             # 询问是否执行pod install
-            reply = QMessageBox.question(
+            reply = ModernDialog.question(
                 self,
                 "确认",
                 f"已切换 {len(pods_info)} 个Pod到标签模式，是否执行 pod install?",
-                QMessageBox.Yes | QMessageBox.No,
             )
-            if reply == QMessageBox.Yes:
+            if reply == ModernDialog.Yes:
                 self.run_pod_install()
 
     def _switch_to_tag_mode_with_items(self, selected_items):
@@ -1392,27 +1415,16 @@ class PodPilot(QMainWindow):
         )
         return branch_pods
 
-    def _get_tag_pods(self, project_dir):
-        """获取所有使用:tag引用的Pod"""
-        podfile_path = os.path.join(project_dir, "Podfile")
-        if not os.path.exists(podfile_path):
-            return []
-
-        pods, dev_pods, tag_pods, branch_pods, git_pods = (
-            PodService.load_pods_from_podfile(podfile_path)
-        )
-        return tag_pods
-
     def one_click_tag_mode(self):
         """一键Tag模式：自动筛选所有branch引用的pod并批量切换到Tag"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         # 获取所有branch引用的pod
         target_pods = self._get_branch_pods(self.current_project)
         if not target_pods:
-            QMessageBox.information(
+            ModernDialog.information(
                 self, "提示", "当前项目中没有发现使用branch引用的Pod"
             )
             return
@@ -1444,13 +1456,12 @@ class PodPilot(QMainWindow):
                         break
 
             # 询问是否立即配置
-            reply = QMessageBox.question(
+            reply = ModernDialog.question(
                 self,
                 "配置检查",
                 msg + "\n\n是否立即配置这些Pod?",
-                QMessageBox.Yes | QMessageBox.No,
             )
-            if reply == QMessageBox.Yes:
+            if reply == ModernDialog.Yes:
                 self.configure_selected_pod()
             return
 
@@ -1473,11 +1484,11 @@ class PodPilot(QMainWindow):
         )
 
         if not selected_items:
-            QMessageBox.warning(self, "警告", "未能自动选择branch引用的Pod")
+            ModernDialog.warning(self, "警告", "未能自动选择branch引用的Pod")
             return
 
         # 显示选择结果
-        reply = QMessageBox.question(
+        reply = ModernDialog.question(
             self,
             "一键Tag",
             f"已自动选择 {len(selected_items)} 个branch引用的Pod:\n\n"
@@ -1485,101 +1496,22 @@ class PodPilot(QMainWindow):
                 [f"• {self.get_pod_name_from_item(item)}" for item in selected_items]
             )
             + "\n\n是否立即进入Tag切换模式?",
-            QMessageBox.Yes | QMessageBox.No,
         )
 
-        if reply == QMessageBox.Yes:
+        if reply == ModernDialog.Yes:
             # 直接调用switch_to_tag_mode，传递选中的items
             self._switch_to_tag_mode_with_items(selected_items)
-
-    def one_click_branch_mode(self):
-        """一键Branch模式：自动筛选所有tag引用的pod并批量切换到Branch"""
-        if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
-            return
-
-        # 获取所有tag引用的pod
-        target_pods = self._get_tag_pods(self.current_project)
-        if not target_pods:
-            QMessageBox.information(self, "提示", "当前项目中没有发现使用tag引用的Pod")
-            return
-
-        # 检查每个Pod是否有配置
-        current_config = self.get_current_pods_config()
-        configured_pods = []
-        unconfigured_pods = []
-
-        for pod_name in target_pods:
-            if pod_name in current_config:
-                configured_pods.append(pod_name)
-            else:
-                unconfigured_pods.append(pod_name)
-
-        # 如果有未配置的Pod，必须先配置
-        if unconfigured_pods:
-            msg = f"发现 {len(unconfigured_pods)} 个tag Pod没有配置本地路径:\n\n"
-            msg += "\n".join([f"• {pod}" for pod in unconfigured_pods[:5]])
-            if len(unconfigured_pods) > 5:
-                msg += f"\n... 还有 {len(unconfigured_pods) - 5} 个"
-
-            reply = QMessageBox.question(
-                self,
-                "配置检查",
-                msg + "\n\n是否立即配置这些Pod?",
-                QMessageBox.Yes | QMessageBox.No,
-            )
-            if reply == QMessageBox.Yes:
-                self.configure_selected_pod()
-            return
-
-        if not configured_pods:
-            return
-
-        # 自动选择已配置的pod
-        self.pod_list.clearSelection()
-        selected_items = []
-
-        for i in range(self.pod_list.count()):
-            item = self.pod_list.item(i)
-            pod_name = self.get_pod_name_from_item(item)
-            if pod_name in configured_pods:
-                item.setSelected(True)
-                selected_items.append(item)
-
-        self.log_message(
-            f"一键Branch: 成功选择 {len(selected_items)} 个已配置的Pod进行Branch切换"
-        )
-
-        if not selected_items:
-            QMessageBox.warning(self, "警告", "未能自动选择tag引用的Pod")
-            return
-
-        # 显示选择结果
-        reply = QMessageBox.question(
-            self,
-            "一键Branch",
-            f"已自动选择 {len(selected_items)} 个tag引用的Pod:\n\n"
-            + "\n".join(
-                [f"• {self.get_pod_name_from_item(item)}" for item in selected_items]
-            )
-            + "\n\n是否立即进入Branch切换模式?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-
-        if reply == QMessageBox.Yes:
-            # 直接调用switch_to_branch_mode
-            self.switch_to_branch_mode()
 
     def one_click_mr_mode(self):
         """一键MR模式：自动筛选所有branch引用的pod并批量创建Merge Request"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         # 获取所有branch引用的pod
         target_pods = self._get_branch_pods(self.current_project)
         if not target_pods:
-            QMessageBox.information(
+            ModernDialog.information(
                 self, "提示", "当前项目中没有发现使用branch引用的Pod"
             )
             return
@@ -1611,13 +1543,12 @@ class PodPilot(QMainWindow):
                         break
 
             # 询问是否立即配置
-            reply = QMessageBox.question(
+            reply = ModernDialog.question(
                 self,
                 "配置检查",
                 msg + "\n\n是否立即配置这些Pod?",
-                QMessageBox.Yes | QMessageBox.No,
             )
-            if reply == QMessageBox.Yes:
+            if reply == ModernDialog.Yes:
                 self.configure_selected_pod()
             return
 
@@ -1640,32 +1571,29 @@ class PodPilot(QMainWindow):
         )
 
         if not selected_items:
-            QMessageBox.warning(self, "警告", "未能自动选择branch引用的Pod")
+            ModernDialog.warning(self, "警告", "未能自动选择branch引用的Pod")
             return
 
-        # 创建loading对话框并保存为实例变量以防止被垃圾回收
-        self.loading_dialog = QDialog(self)
-        self.loading_dialog.setWindowTitle("加载中")
-        self.loading_dialog.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint)
-        self.loading_dialog.setFixedSize(200, 100)
-        self.loading_dialog.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f7;
-                border-radius: 12px;
+        # 创建半透明遮罩层
+        self.loading_overlay = QWidget(self)
+        self.loading_overlay.setGeometry(0, 0, self.width(), self.height())
+        self.loading_overlay.setStyleSheet("""
+            QWidget {
+                background-color: rgba(0, 0, 0, 0.5);
             }
         """)
+        self.loading_overlay.setAttribute(Qt.WA_StyledBackground, True)
+        self.loading_overlay.show()
+        self.loading_overlay.raise_()
 
-        loading_layout = QVBoxLayout()
-        loading_layout.setContentsMargins(20, 20, 20, 20)
-
-        # 使用LoadingWidget
-        self.loading_widget = LoadingWidget("加载Pod MR信息...")
-        loading_layout.addWidget(self.loading_widget)
-
-        self.loading_dialog.setLayout(loading_layout)
-        self.loading_dialog.show()
-
-        # 开始动画
+        # 在遮罩层上放置LoadingWidget
+        self.loading_widget = LoadingWidget(
+            "加载Pod MR信息...", LoadingWidget.STYLE_SPINNER, self.loading_overlay
+        )
+        self.loading_widget.setGeometry(
+            (self.width() - 200) // 2, (self.height() - 120) // 2, 200, 120
+        )
+        self.loading_widget.show()
         self.loading_widget.start_animation()
 
         # 收集Pod信息
@@ -1730,18 +1658,22 @@ class PodPilot(QMainWindow):
         """处理MR信息加载完成"""
         try:
             # 清理线程引用
-            if hasattr(self, "mr_info_loader"):
-                self.mr_info_loader = None
+            if hasattr(self, "mr_info_loader") and self.mr_info_loader:
+                try:
+                    self.mr_info_loader.wait()
+                except RuntimeError:
+                    pass
+                finally:
+                    self.mr_info_loader = None
 
-            # 停止loading动画
+            # 停止loading动画并移除遮罩层
             if hasattr(self, "loading_widget") and self.loading_widget is not None:
                 self.loading_widget.stop_animation()
                 self.loading_widget = None
 
-            # 关闭loading对话框并清理引用
-            if hasattr(self, "loading_dialog") and self.loading_dialog is not None:
-                self.loading_dialog.close()
-                self.loading_dialog = None
+            if hasattr(self, "loading_overlay") and self.loading_overlay is not None:
+                self.loading_overlay.deleteLater()
+                self.loading_overlay = None
 
             # 过滤掉有错误的Pod，并提取主工程信息
             valid_pods_info = {}
@@ -1756,7 +1688,7 @@ class PodPilot(QMainWindow):
                     self.log_message(f"{pod_name}: {info['error']}")
 
             if not valid_pods_info and not main_project_info:
-                QMessageBox.warning(self, "警告", "没有可用的Pod信息")
+                ModernDialog.warning(self, "警告", "没有可用的Pod信息")
                 return
 
             # 使用MR对话框，传入config以加载Token（重新加载最新配置）
@@ -1772,8 +1704,12 @@ class PodPilot(QMainWindow):
             if dialog.exec_() == QDialog.Accepted:
                 self.log_message("批量创建MR完成")
         except Exception as e:
+            # 确保在异常情况下也清理 loading
+            if hasattr(self, "loading_overlay") and self.loading_overlay is not None:
+                self.loading_overlay.deleteLater()
+                self.loading_overlay = None
             self.log_message(f"处理MR信息时发生错误: {str(e)}")
-            QMessageBox.critical(self, "错误", f"处理MR信息时发生错误: {str(e)}")
+            ModernDialog.error(self, "错误", f"处理MR信息时发生错误: {str(e)}")
 
     def _on_mr_info_error(self, error_msg):
         """处理MR信息收集错误"""
@@ -1784,24 +1720,23 @@ class PodPilot(QMainWindow):
 
             self.log_message(f"错误: {error_msg}")
 
-            # 停止loading动画
+            # 停止loading动画并移除遮罩层
             if hasattr(self, "loading_widget") and self.loading_widget is not None:
                 self.loading_widget.stop_animation()
                 self.loading_widget = None
 
-            # 关闭loading对话框并清理引用
-            if hasattr(self, "loading_dialog") and self.loading_dialog is not None:
-                self.loading_dialog.close()
-                self.loading_dialog = None
+            if hasattr(self, "loading_overlay") and self.loading_overlay is not None:
+                self.loading_overlay.deleteLater()
+                self.loading_overlay = None
 
-            QMessageBox.critical(self, "错误", error_msg)
+            ModernDialog.error(self, "错误", error_msg)
         except Exception as e:
             self.log_message(f"处理错误时发生异常: {str(e)}")
 
     def show_project_mrs(self):
         """显示当前工程相关的 MR"""
         if not self.current_project:
-            QMessageBox.warning(self, "提示", "请先选择一个工程")
+            ModernDialog.warning(self, "提示", "请先选择一个工程")
             return
 
         # 加载个人配置获取 Token
@@ -1809,7 +1744,7 @@ class PodPilot(QMainWindow):
         gitlab_token = self.personal_config.get("gitlab_token", "")
 
         if not gitlab_token:
-            QMessageBox.warning(self, "提示", "请先在个人中心配置 GitLab Token")
+            ModernDialog.warning(self, "提示", "请先在个人中心配置 GitLab Token")
             return
 
         # 获取主工程信息
@@ -1981,11 +1916,11 @@ class PodPilot(QMainWindow):
         """显示Pod的操作历史"""
         current_items = self.pod_list.selectedItems()
         if not current_items:
-            QMessageBox.warning(self, "警告", "请先选择要查看历史的Pod")
+            ModernDialog.warning(self, "警告", "请先选择要查看历史的Pod")
             return
 
         if len(current_items) > 1:
-            QMessageBox.warning(self, "警告", "一次只能查看一个Pod的历史")
+            ModernDialog.warning(self, "警告", "一次只能查看一个Pod的历史")
             return
 
         item = current_items[0]
@@ -2022,69 +1957,24 @@ class PodPilot(QMainWindow):
         dialog.exec_()
 
     def clean_pod_cache(self):
+        """清理Pod缓存"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
-        dialog = QDialog(self)
-        dialog.setWindowTitle("清理Pod缓存")
-        dialog.resize(400, 250)
-
-        layout = QVBoxLayout()
-
-        info_label = QLabel("请选择要清理的内容：")
-        info_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-        layout.addWidget(info_label)
-
-        checkbox_layout = QVBoxLayout()
-        self.clean_pods_cb = QCheckBox("删除 Pods 目录")
-        self.clean_pods_cb.setChecked(True)
-        self.clean_pods_cb.setStyleSheet("font-size: 12px;")
-        checkbox_layout.addWidget(self.clean_pods_cb)
-
-        self.clean_lock_cb = QCheckBox("删除 Podfile.lock 文件")
-        self.clean_lock_cb.setChecked(True)
-        self.clean_lock_cb.setStyleSheet("font-size: 12px;")
-        checkbox_layout.addWidget(self.clean_lock_cb)
-
-        self.clean_cache_cb = QCheckBox("清理 CocoaPods 缓存")
-        self.clean_cache_cb.setChecked(True)
-        self.clean_cache_cb.setStyleSheet("font-size: 12px;")
-        checkbox_layout.addWidget(self.clean_cache_cb)
-
-        warning_label = QLabel("此操作不可逆，请谨慎选择！")
-        warning_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        warning_label.setWordWrap(True)
-        warning_label.setStyleSheet(
-            "color: #ff3b30; font-weight: bold; margin-top: 15px; padding: 8px; border: 1px solid #ff3b30; border-radius: 4px; background-color: #fff3f3;"
-        )
-        layout.addWidget(warning_label)
-
-        layout.addLayout(checkbox_layout)
-
-        btn_layout = QHBoxLayout()
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setProperty("type", "cancel")
-        cancel_btn.clicked.connect(dialog.reject)
-        ok_btn = QPushButton("开始清理")
-        ok_btn.setProperty("buttonType", "warning")
-        ok_btn.clicked.connect(dialog.accept)
-
-        btn_layout.addWidget(cancel_btn)
-        btn_layout.addWidget(ok_btn)
-        layout.addLayout(btn_layout)
-
-        dialog.setLayout(layout)
-
+        # 使用新的 CleanCacheDialog
+        dialog = CleanCacheDialog(self)
         if dialog.exec_() != QDialog.Accepted:
             return
 
-        clean_pods = self.clean_pods_cb.isChecked()
-        clean_lock = self.clean_lock_cb.isChecked()
-        clean_cache = self.clean_cache_cb.isChecked()
+        # 获取清理选项
+        options = dialog.get_options()
+        clean_pods = options.get("pods", False)
+        clean_lock = options.get("lock", False)
+        clean_cache = options.get("cache", False)
 
         if not clean_pods and not clean_lock and not clean_cache:
-            QMessageBox.information(self, "提示", "未选择任何清理项")
+            ModernDialog.information(self, "提示", "未选择任何清理项")
             return
 
         def on_clean_finished(exit_code):
@@ -2098,12 +1988,12 @@ class PodPilot(QMainWindow):
 
             if exit_code == 0 or not clean_cache:
                 self.log_message("Pod缓存清理完成")
-                QMessageBox.information(
+                ModernDialog.success(
                     self, "成功", f"已清理：\n{', '.join(summary_parts)}"
                 )
             else:
                 self.log_message(f"Pod缓存清理失败，退出码: {exit_code}")
-                QMessageBox.warning(
+                ModernDialog.warning(
                     self,
                     "警告",
                     f"部分清理失败\n\n已清理：\n{', '.join(summary_parts)}\n\n请查看日志了解详情",
@@ -2119,12 +2009,12 @@ class PodPilot(QMainWindow):
 
     def run_pod_install(self):
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         podfile_path = os.path.join(self.current_project, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "错误", "未找到Podfile")
+            ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
         self.log_message(f"项目路径: {self.current_project}")
@@ -2133,10 +2023,10 @@ class PodPilot(QMainWindow):
         def on_pod_install_finished(exit_code, exit_status):
             if exit_code == 0:
                 self.log_message("pod install 完成")
-                QMessageBox.information(self, "成功", "pod install 完成")
+                ModernDialog.information(self, "成功", "pod install 完成")
             else:
                 self.log_message(f"pod install 失败，退出码: {exit_code}")
-                QMessageBox.warning(
+                ModernDialog.warning(
                     self, "警告", f"pod install 失败，请查看日志了解详情"
                 )
 
@@ -2144,7 +2034,7 @@ class PodPilot(QMainWindow):
         self.pod_install_service.run_pod_install(self.current_project)
         """清理Pod缓存"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         # 创建清理选项对话框
@@ -2211,7 +2101,7 @@ class PodPilot(QMainWindow):
         clean_cache = self.clean_cache_cb.isChecked()
 
         if not clean_pods and not clean_lock and not clean_cache:
-            QMessageBox.information(self, "提示", "未选择任何清理项")
+            ModernDialog.information(self, "提示", "未选择任何清理项")
             return
 
         self.log_message("开始清理Pod缓存...")
@@ -2277,7 +2167,7 @@ pod cache clean --all
 
         except Exception as e:
             self.log_message(f"清理失败: {str(e)}")
-            QMessageBox.critical(self, "错误", f"清理失败: {str(e)}")
+            ModernDialog.error(self, "错误", f"清理失败: {str(e)}")
 
     def on_cache_clean_finished(self, exit_code, clean_pods, clean_lock, clean_cache):
         """缓存清理完成回调"""
@@ -2291,12 +2181,12 @@ pod cache clean --all
 
         if exit_code == 0 or not clean_cache:
             self.log_message("Pod缓存清理完成")
-            QMessageBox.information(
+            ModernDialog.information(
                 self, "成功", f"已清理：\n{', '.join(summary_parts)}"
             )
         else:
             self.log_message(f"Pod缓存清理失败，退出码: {exit_code}")
-            QMessageBox.warning(
+            ModernDialog.warning(
                 self,
                 "警告",
                 f"部分清理失败\n\n已清理：\n{', '.join(summary_parts)}\n\n请查看日志了解详情",
@@ -2309,12 +2199,12 @@ pod cache clean --all
     def run_pod_install(self):
         """运行pod install"""
         if not self.current_project:
-            QMessageBox.warning(self, "警告", "请先选择项目")
+            ModernDialog.warning(self, "警告", "请先选择项目")
             return
 
         podfile_path = os.path.join(self.current_project, "Podfile")
         if not os.path.exists(podfile_path):
-            QMessageBox.warning(self, "错误", "未找到Podfile")
+            ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
         self.log_message(f"项目路径: {self.current_project}")
@@ -2362,10 +2252,10 @@ cd "{self.current_project}" && pod install
         """pod install完成后的回调"""
         if exit_code == 0:
             self.log_message("pod install 完成")
-            QMessageBox.information(self, "成功", "pod install 完成")
+            ModernDialog.information(self, "成功", "pod install 完成")
         else:
             self.log_message(f"pod install 失败，退出码: {exit_code}")
-            QMessageBox.warning(self, "警告", f"pod install 失败，请查看日志了解详情")
+            ModernDialog.warning(self, "警告", f"pod install 失败，请查看日志了解详情")
 
         # 删除进程对象
         process.deleteLater()

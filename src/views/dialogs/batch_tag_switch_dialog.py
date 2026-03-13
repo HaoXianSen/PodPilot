@@ -2,24 +2,21 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QLabel,
-    QLineEdit,
-    QGridLayout,
-    QDialog,
     QVBoxLayout,
-    QGroupBox,
-    QTextEdit,
     QMessageBox,
-    QComboBox,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QAbstractItemView,
     QWidget,
     QApplication,
+    QScrollArea,
+    QFrame,
+    QSizePolicy,
 )
 from PyQt5.QtGui import QBrush, QColor
-from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from src.widgets.loading_widget import LoadingWidget
+from src.widgets.custom_dropdown import CustomDropdown
+from src.styles import Colors, Styles, GlassmorphismStyle
+from src.components.modern_dialog import ModernDialog
+from src.components.bottom_sheet_dialog import BottomSheetDialog
 import subprocess
 import os
 import re
@@ -28,45 +25,32 @@ import re
 class TagSwitchWorker(QThread):
     """异步切换Tag的工作线程"""
 
-    finished = pyqtSignal(
-        dict
-    )  # 发送结果：{'success_count': int, 'fail_count': int, 'error_messages': list}
+    finished = pyqtSignal(dict)
 
     def __init__(self, pods_info, tag_selections, podfile_path, podfile_lines):
         super().__init__()
         self.pods_info = pods_info
-        self.tag_selections = tag_selections  # {row: selected_tag}
+        self.tag_selections = tag_selections
         self.podfile_path = podfile_path
         self.podfile_lines = podfile_lines
 
     def _parse_tag_reference(self, pod_line):
-        """解析pod行中的tag引用，返回(tag_type, tag_value)
-        tag_type: 'literal', 'variable', 或 None
-        tag_value: tag的值或变量名
-        """
-        # 匹配 :tag => 'value' 或 :tag => "value" 或 :tag => VARIABLE
+        """解析pod行中的tag引用，返回(tag_type, tag_value)"""
         tag_match = re.search(r":tag\s*=>\s*([^,\s\n]+)", pod_line)
         if not tag_match:
             return None, None
 
         tag_value = tag_match.group(1).strip()
 
-        # 检查是否是字符串字面量
         if (tag_value.startswith("'") and tag_value.endswith("'")) or (
             tag_value.startswith('"') and tag_value.endswith('"')
         ):
-            return "literal", tag_value[1:-1]  # 去掉引号
+            return "literal", tag_value[1:-1]
         else:
-            # 可能是变量引用
             return "variable", tag_value
 
     def _parse_branch_reference(self, pod_line):
-        """解析pod行中的branch引用，返回(branch_type, branch_value, references)
-        branch_type: 'literal', 'variable', 或 None
-        branch_value: branch的值或变量名
-        references: 找到的所有branch引用列表，每个元素包含(type, value, match_text)
-        """
-        # 查找所有 :branch => 引用
+        """解析pod行中的branch引用"""
         branch_pattern = r":branch\s*=>\s*([^,\s\n]+)"
         matches = re.finditer(branch_pattern, pod_line)
 
@@ -75,12 +59,11 @@ class TagSwitchWorker(QThread):
             branch_value = match.group(1).strip()
             match_text = match.group(0)
 
-            # 检查是否是字符串字面量
             if (branch_value.startswith("'") and branch_value.endswith("'")) or (
                 branch_value.startswith('"') and branch_value.endswith('"')
             ):
                 branch_type = "literal"
-                actual_value = branch_value[1:-1]  # 去掉引号
+                actual_value = branch_value[1:-1]
             else:
                 branch_type = "variable"
                 actual_value = branch_value
@@ -95,14 +78,12 @@ class TagSwitchWorker(QThread):
 
     def _convert_branch_to_tag(self, pod_declaration):
         """将Pod声明中的:branch =>转换为:tag =>"""
-        # 替换所有 :branch => 为 :tag =>
         new_declaration = re.sub(r":branch\s*=>", ":tag =>", pod_declaration)
         return new_declaration
 
     def _find_variable_definition(self, var_name):
         """查找变量定义，返回(行号, 当前值)"""
         for i, line in enumerate(self.podfile_lines):
-            # 匹配 VARIABLE = 'value' 或 VARIABLE = "value"
             match = re.match(
                 rf'^\s*{re.escape(var_name)}\s*=\s*[\'"]([^\'"]*)[\'"]', line
             )
@@ -111,9 +92,7 @@ class TagSwitchWorker(QThread):
         return None, None
 
     def _get_full_pod_declaration(self, start_idx, pod_name):
-        """获取完整的pod声明（可能跨越多行）
-        返回: (start_idx, end_idx, full_declaration)
-        """
+        """获取完整的pod声明（可能跨越多行）"""
         if start_idx >= len(self.podfile_lines):
             return None, None, None
 
@@ -166,19 +145,15 @@ class TagSwitchWorker(QThread):
                         if full_declaration is None:
                             continue
 
-                        # 检测当前模式
                         if ":branch =>" in full_declaration:
-                            # Branch 模式，需要转换为 Tag 模式
                             branch_type, branch_value, branch_refs = (
                                 self._parse_branch_reference(full_declaration)
                             )
                             if branch_refs:
-                                # 转换所有 :branch => 为 :tag =>
                                 new_declaration = self._convert_branch_to_tag(
                                     full_declaration
                                 )
 
-                                # 更新变量值
                                 for ref in branch_refs:
                                     if ref["type"] == "variable":
                                         var_line_idx, current_value = (
@@ -193,7 +168,6 @@ class TagSwitchWorker(QThread):
                                             )
                                             modified = True
                                     elif ref["type"] == "literal":
-                                        # 字面量引用，直接在声明中替换
                                         new_declaration = re.sub(
                                             r":tag\s*=>\s*['\"][^'\"]*['\"]",
                                             f":tag => '{selected_tag}'",
@@ -202,7 +176,6 @@ class TagSwitchWorker(QThread):
                                         modified = True
 
                                 if start_idx == end_idx:
-                                    # 单行声明，保留原始换行符
                                     if new_lines[start_idx].endswith("\n"):
                                         new_lines[start_idx] = new_declaration + "\n"
                                     else:
@@ -217,7 +190,6 @@ class TagSwitchWorker(QThread):
                                     f"{pod_name}: 未找到 :branch => 引用"
                                 )
                         elif ":tag =>" in full_declaration:
-                            # Tag 模式，直接更新 Tag 值
                             tag_type, tag_value = self._parse_tag_reference(
                                 full_declaration
                             )
@@ -268,7 +240,6 @@ class TagSwitchWorker(QThread):
                                             )
 
                                 if start_idx == end_idx:
-                                    # 单行声明，保留原始换行符
                                     if new_lines[start_idx].endswith("\n"):
                                         new_lines[start_idx] = new_declaration + "\n"
                                     else:
@@ -291,13 +262,12 @@ class TagSwitchWorker(QThread):
                 error_messages.append(f"{pod_name}: {str(e)}")
                 fail_count += 1
 
-        # 写回Podfile
         try:
             with open(self.podfile_path, "w") as f:
                 f.writelines(new_lines)
         except Exception as e:
             error_messages.append(f"写入Podfile失败: {str(e)}")
-            fail_count += success_count  # 所有修改都失败了
+            fail_count += success_count
             success_count = 0
 
         self.finished.emit(
@@ -309,166 +279,234 @@ class TagSwitchWorker(QThread):
         )
 
 
-class BatchTagSwitchDialog(QDialog):
+class BatchTagSwitchDialog(BottomSheetDialog):
+    """批量切换Tag对话框 - Bottom Sheet 风格（卡片式布局）"""
+
     def __init__(self, pods_info, podfile_path=None, podfile_lines=None, parent=None):
-        """
-        pods_info: list of dict, each dict contains:
-        {
-            'name': pod_name,
-            'path': local_path,
-            'remote_tags': list of remote tags
-        }
-        """
-        super().__init__(parent)
         self.pods_info = pods_info
         self.podfile_path = podfile_path
         self.podfile_lines = podfile_lines
-        self.current_row = 0
-        self.initUI()
-        self.load_pods_info()
+        self.tag_selections = {}
+        self.worker = None
+        self.loading_widget = None
+        self.pod_cards = []
 
-    def initUI(self):
-        self.setWindowTitle("批量切换Tag")
-        self.setGeometry(200, 200, 1200, 600)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f7;
-            }
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-size: 13px;
-                min-height: 24px;
-            }
-            QPushButton:hover {
-                background-color: #0051d5;
-            }
-            QPushButton[type="cancel"] {
-                background-color: #e8e8ed;
-                color: #1d1d1f;
-            }
-            QPushButton[type="cancel"]:hover {
-                background-color: #d1d1d6;
-            }
-            QLabel {
-                color: #86868b;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QComboBox {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 2px 10px;
-                background-color: white;
-                min-height: 20px;
-                font-size: 12px;
-                color: #1d1d1f;
-            }
-            QComboBox:hover {
-                border-color: #007aff;
-            }
-            QComboBox:focus {
-                border-color: #007aff;
-                border-width: 2px;
-                padding: 1px 9px;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
+        super().__init__(parent, title="批量切换Tag", max_height_ratio=0.85)
+
+        self._build_content()
+        self._apply_content_styles()
+        self.load_pods_info()
+        self.setup_sheet_ui()
+
+    def _build_content(self):
+        """构建内容区域"""
+        desc_label = QLabel("为每个 Pod 选择要切换的远程 Tag")
+        desc_label.setStyleSheet(
+            f"color: {Colors.TEXT_MUTED}; font-size: 12px; background: transparent; border: none;"
+        )
+        self.content_layout.addWidget(desc_label)
+
+        # 滚动区域
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{
                 background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxwYXRoIGZpbGw9IiM4Njg2OGIiIGQ9Ik0yIDJsMyAzaDNsLTItMi0yIDItMyAzeiIgLz48L3N2Zz4=);
-                width: 10px;
-                height: 10px;
-            }
-            QComboBox QAbstractItemView {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                background-color: white;
-                selection-background-color: #007aff;
-                selection-color: white;
-                font-size: 12px;
-                padding: 4px;
-            }
-            QGroupBox {
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding-top: 12px;
-                background-color: white;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 4px;
-                font-weight: 600;
-            }
-            QTableWidget {
-                border: 1px solid #d1d1d6;
-                border-radius: 8px;
-                background-color: white;
-                gridline-color: #e0e0e0;
-                alternate-background-color: #fafafa;
-            }
-            QTableWidget::item {
-                padding: 4px 8px;
-            }
-            QHeaderView::section {
-                background-color: #f5f5f7;
-                padding: 8px;
                 border: none;
-                border-bottom: 2px solid #e0e0e0;
-                font-weight: bold;
-            }
+            }}
+            QScrollBar:vertical {{
+                border: none;
+                background: transparent;
+                width: 8px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba(255, 255, 255, 0.2);
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgba(255, 255, 255, 0.3);
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
         """)
 
-        layout = QVBoxLayout()
+        # 卡片容器
+        self.cards_container = QWidget()
+        self.cards_container.setStyleSheet("background: transparent; border: none;")
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 12, 0)
+        self.cards_layout.setSpacing(12)
 
-        # 表格区域
-        table_group = QGroupBox("Pod Tag切换列表")
-        table_layout = QVBoxLayout()
+        self.scroll_area.setWidget(self.cards_container)
+        self.content_layout.addWidget(self.scroll_area, 1)
 
-        self.pod_table = QTableWidget()
-        self.pod_table.setColumnCount(5)
-        self.pod_table.setHorizontalHeaderLabels(
-            ["Pod名称", "当前模式", "当前状态", "远程Tag", "选择Tag"]
+        # 修改按钮文本和连接
+        self.confirm_btn.setText("切换")
+        self.confirm_btn.clicked.disconnect()
+        self.confirm_btn.clicked.connect(self.switch_all_tags)
+
+    def _apply_content_styles(self):
+        """应用样式"""
+        self.setStyleSheet(f"""
+            QComboBox QAbstractItemView {{
+                background-color: #1a1a2e;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 6px;
+                padding: 4px;
+                outline: none;
+            }}
+            QComboBox QAbstractItemView::item {{
+                padding: 6px 10px;
+                min-height: 24px;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background-color: rgba(102, 126, 234, 0.4);
+                color: {Colors.TEXT_PRIMARY};
+            }}
+        """)
+
+    def _create_pod_card(self, row, pod_info):
+        """创建单个 Pod 卡片"""
+        card = QFrame()
+        card.setObjectName("podCard")
+        card.setStyleSheet(f"""
+            QFrame#podCard {{
+                background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 12px;
+            }}
+        """)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 12, 16, 12)
+        card_layout.setSpacing(10)
+
+        # Header: Pod名称 + 当前模式标签
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
+
+        name_label = QLabel(pod_info["name"])
+        name_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 14px;
+                font-weight: 600;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        header_layout.addWidget(name_label)
+
+        # 检测当前模式
+        mode = self._detect_pod_mode(pod_info["name"])
+        if mode == "branch":
+            mode_badge = QLabel("Branch")
+            mode_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #fbbf24;
+                    font-size: 11px;
+                    background-color: rgba(251, 191, 36, 0.15);
+                    border: 1px solid rgba(251, 191, 36, 0.25);
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                }}
+            """)
+            header_layout.addWidget(mode_badge)
+        elif mode == "tag":
+            mode_badge = QLabel("Tag")
+            mode_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #60a5fa;
+                    font-size: 11px;
+                    background-color: rgba(96, 165, 250, 0.15);
+                    border: 1px solid rgba(96, 165, 250, 0.25);
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                }}
+            """)
+            header_layout.addWidget(mode_badge)
+
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        # 本地路径
+        path_label = QLabel(pod_info.get("path", ""))
+        path_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_MUTED};
+                font-size: 11px;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        card_layout.addWidget(path_label)
+
+        # Tag选择行
+        tag_row = QHBoxLayout()
+        tag_row.setSpacing(12)
+
+        tag_label = QLabel("选择Tag:")
+        tag_label.setFixedWidth(65)
+        tag_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
         )
-        self.pod_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.pod_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.pod_table.horizontalHeader().setStretchLastSection(True)
-        self.pod_table.verticalHeader().setVisible(False)
-        self.pod_table.setAlternatingRowColors(True)
+        tag_row.addWidget(tag_label)
 
-        # 设置列宽
-        self.pod_table.setColumnWidth(0, 180)  # Pod名称
-        self.pod_table.setColumnWidth(1, 100)  # 当前模式
-        self.pod_table.setColumnWidth(2, 120)  # 当前状态
-        self.pod_table.setColumnWidth(3, 250)  # 远程Tag
-        self.pod_table.setColumnWidth(4, 200)  # 选择Tag
+        # 使用CustomDropdown组件
+        remote_tags = pod_info.get("remote_tags", [])
+        tag_combo = CustomDropdown()
+        tag_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        table_layout.addWidget(self.pod_table)
-        table_group.setLayout(table_layout)
-        layout.addWidget(table_group)
+        if remote_tags:
+            tag_combo.addItems(remote_tags)
+            # 默认选择第一个tag
+            if len(remote_tags) > 0:
+                tag_combo.setCurrentText(remote_tags[0])
+                self.tag_selections[row] = remote_tags[0]
+            tag_combo.currentTextChanged.connect(
+                lambda text, r=row: self.on_tag_selected(r, text)
+            )
+        else:
+            tag_combo.addItem("无远程Tag")
+            tag_combo.setEnabled(False)
 
-        # 按钮区域
-        btn_layout = QHBoxLayout()
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setProperty("type", "cancel")
-        cancel_btn.clicked.connect(self.reject)
+        tag_row.addWidget(tag_combo)
+        card_layout.addLayout(tag_row)
 
-        switch_all_btn = QPushButton("批量切换所有Tag")
-        switch_all_btn.setProperty("buttonType", "success")
-        switch_all_btn.clicked.connect(self.switch_all_tags)
+        # 远程Tag提示（显示前3个）
+        if remote_tags and len(remote_tags) > 1:
+            tags_hint = ", ".join(remote_tags[:3])
+            if len(remote_tags) > 3:
+                tags_hint += f" ... (共{len(remote_tags)}个)"
+            hint_label = QLabel(f"可用: {tags_hint}")
+            hint_label.setStyleSheet(f"""
+                QLabel {{
+                    color: {Colors.TEXT_MUTED};
+                    font-size: 10px;
+                    background: transparent;
+                    border: none;
+                    margin-left: 77px;
+                }}
+            """)
+            card_layout.addWidget(hint_label)
 
-        btn_layout.addWidget(switch_all_btn)
-        btn_layout.addWidget(cancel_btn)
-        layout.addLayout(btn_layout)
+        # 保存卡片组件引用
+        self.pod_cards.append(
+            {
+                "card": card,
+                "tag_combo": tag_combo,
+            }
+        )
 
-        self.setLayout(layout)
+        return card
 
     def _detect_pod_mode(self, pod_name):
         """检测Pod的模式：返回 'branch', 'tag', 或 'unknown'"""
@@ -476,7 +514,6 @@ class BatchTagSwitchDialog(QDialog):
             return "unknown"
         for i, line in enumerate(self.podfile_lines):
             if f"pod '{pod_name}'" in line or f'pod "{pod_name}"' in line:
-                # 拼接可能的多行声明
                 full_line = line
                 j = i
                 while full_line.rstrip().endswith("\\") and j + 1 < len(
@@ -491,128 +528,77 @@ class BatchTagSwitchDialog(QDialog):
         return "unknown"
 
     def load_pods_info(self):
-        """加载Pod信息到表格"""
-        self.pod_table.setRowCount(len(self.pods_info))
-        self.tag_selections = {}  # {row: selected_tag}
-
+        """加载Pod信息，创建卡片"""
         for row, pod_info in enumerate(self.pods_info):
-            print(
-                f"BatchTagSwitchDialog: 加载Pod {pod_info['name']}, remote_tags: {len(pod_info.get('remote_tags', []))}"
-            )
-            # Pod名称
-            name_item = QTableWidgetItem(pod_info["name"])
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self.pod_table.setItem(row, 0, name_item)
+            card = self._create_pod_card(row, pod_info)
+            self.cards_layout.addWidget(card)
 
-            # 当前模式
-            mode = self._detect_pod_mode(pod_info["name"])
-            mode_text = "Branch" if mode == "branch" else "Tag"
-            mode_item = QTableWidgetItem(mode_text)
-            mode_item.setFlags(mode_item.flags() & ~Qt.ItemIsEditable)
-            mode_item.setForeground(
-                QBrush(QColor("#007aff"))
-                if mode == "tag"
-                else QBrush(QColor("#ff9500"))
-            )
-            self.pod_table.setItem(row, 1, mode_item)
-
-            # 当前状态（暂时显示为"准备切换"）
-            status_item = QTableWidgetItem("准备切换")
-            status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
-            self.pod_table.setItem(row, 2, status_item)
-
-            # 远程Tag列表
-            remote_tags = pod_info.get("remote_tags", [])
-            tags_text = ", ".join(remote_tags[:3]) if remote_tags else "无远程Tag"
-            if len(remote_tags) > 3:
-                tags_text += "..."
-            tags_item = QTableWidgetItem(tags_text)
-            tags_item.setFlags(tags_item.flags() & ~Qt.ItemIsEditable)
-            tags_item.setToolTip("\n".join(remote_tags) if remote_tags else "无远程Tag")
-            self.pod_table.setItem(row, 3, tags_item)
-
-            # 选择Tag（ComboBox）
-            tag_combo = QComboBox()
-            tag_combo.setFixedHeight(24)
-            if remote_tags:
-                tag_combo.addItem("-- 选择Tag --")
-                tag_combo.addItems(remote_tags)
-                # 默认选择最新版本
-                if len(remote_tags) > 0:
-                    tag_combo.setCurrentIndex(1)  # 选择第一个远程Tag
-                    self.tag_selections[row] = remote_tags[0]
-                tag_combo.currentTextChanged.connect(
-                    lambda text, r=row: self.on_tag_selected(r, text)
-                )
-            else:
-                tag_combo.addItem("无远程Tag")
-            self.pod_table.setCellWidget(row, 4, tag_combo)
-
-        # 设置行高
-        for i in range(self.pod_table.rowCount()):
-            self.pod_table.setRowHeight(i, 40)
+        # 添加弹性空间
+        self.cards_layout.addStretch()
 
     def on_tag_selected(self, row, tag_name):
         """当用户选择Tag时"""
-        if tag_name and tag_name != "-- 选择Tag --":
+        if tag_name and tag_name != "无远程Tag":
             self.tag_selections[row] = tag_name
         else:
             self.tag_selections.pop(row, None)
 
     def switch_all_tags(self):
         """批量切换所有Tag"""
-        # 检查是否有未选择的Tag
+        # 检查是否所有Pod都选择了Tag
         unselected_pods = []
-        for row in range(self.pod_table.rowCount()):
+        for row in range(len(self.pods_info)):
             if row not in self.tag_selections:
                 pod_name = self.pods_info[row]["name"]
                 unselected_pods.append(pod_name)
 
         if unselected_pods:
-            QMessageBox.warning(
+            ModernDialog.warning(
                 self,
                 "警告",
                 f"以下Pod未选择Tag:\n{', '.join(unselected_pods)}\n\n请为所有Pod选择Tag后再切换。",
             )
             return
 
-        reply = QMessageBox.question(
+        # 确认对话框
+        reply = ModernDialog.question(
             self,
             "确认",
             f"确定要为 {len(self.pods_info)} 个Pod切换Tag吗？\n\n这将修改Podfile中的Pod引用。",
-            QMessageBox.Yes | QMessageBox.No,
+            ModernDialog.Yes | ModernDialog.No,
         )
 
-        if reply != QMessageBox.Yes:
+        if reply != ModernDialog.Yes:
             return
 
-        # 创建loading对话框
-        loading_dialog = QDialog(self)
-        loading_dialog.setWindowTitle("切换Tag")
-        loading_dialog.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint)
+        # 显示加载对话框
+        loading_dialog = QWidget(self)
         loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f7;
+        loading_dialog.setStyleSheet(f"""
+            QWidget {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {Colors.BG_GRADIENT_START},
+                    stop:0.5 {Colors.BG_GRADIENT_MID},
+                    stop:1 {Colors.BG_GRADIENT_END}
+                );
                 border-radius: 12px;
-            }
+            }}
         """)
 
         loading_layout = QVBoxLayout()
         loading_layout.setContentsMargins(20, 20, 20, 20)
 
-        # 使用LoadingWidget
         self.loading_widget = LoadingWidget("切换中...")
         loading_layout.addWidget(self.loading_widget)
 
         loading_dialog.setLayout(loading_layout)
         loading_dialog.show()
 
-        # 开始动画
         self.loading_widget.start_animation()
         QApplication.processEvents()
 
-        # 创建工作线程执行切换
+        # 启动工作线程
         self.worker = TagSwitchWorker(
             self.pods_info, self.tag_selections, self.podfile_path, self.podfile_lines
         )
@@ -620,12 +606,19 @@ class BatchTagSwitchDialog(QDialog):
             lambda result: self._on_tag_switch_finished(result, loading_dialog)
         )
 
-        # 启动工作线程
         self.worker.start()
 
     def _on_tag_switch_finished(self, result, loading_dialog):
         """处理Tag切换完成"""
-        # 停止动画
+        # 清理线程引用
+        if hasattr(self, "worker") and self.worker:
+            try:
+                self.worker.wait()
+            except RuntimeError:
+                pass
+            finally:
+                self.worker = None
+
         if hasattr(self, "loading_widget"):
             self.loading_widget.stop_animation()
 
@@ -640,7 +633,18 @@ class BatchTagSwitchDialog(QDialog):
             result_msg += "\n\n失败详情:\n" + "\n".join(error_messages[:10])
 
         if fail_count == 0:
-            QMessageBox.information(self, "成功", result_msg)
+            ModernDialog.information(self, "成功", result_msg)
             self.accept()
         else:
-            QMessageBox.warning(self, "警告", result_msg)
+            ModernDialog.warning(self, "警告", result_msg)
+
+    def closeEvent(self, event):
+        """当对话框关闭时清理线程"""
+        if hasattr(self, "worker") and self.worker:
+            try:
+                if self.worker.isRunning():
+                    self.worker.quit()
+                    self.worker.wait(2000)
+            except RuntimeError:
+                pass
+        super().closeEvent(event)

@@ -259,6 +259,9 @@ class ModernDialog(QDialog):
         fade_out.finished.connect(self.accept)
         fade_out.start()
 
+        # 保存动画引用防止被垃圾回收
+        self._fade_out_animation = fade_out
+
     # ============ 静态方法（兼容 QMessageBox API） ============
 
     @staticmethod
@@ -389,35 +392,6 @@ class IconWidget(QWidget):
             # 绘制 ? 符号
             painter.setFont(QFont("Arial", 24, QFont.Bold))
             painter.drawText(self.rect(), Qt.AlignCenter, "?")
-
-    def _on_button_clicked(self, value):
-        """处理按钮点击"""
-        self.result_value = value
-        self._fade_out_and_close()
-
-    def _fade_out_and_close(self):
-        """淡出动画并关闭"""
-        fade_out = QPropertyAnimation(self.opacity_effect, b"opacity")
-        fade_out.setDuration(150)
-        fade_out.setStartValue(1.0)
-        fade_out.setEndValue(0.0)
-        fade_out.setEasingCurve(QEasingCurve.InCubic)
-        fade_out.finished.connect(self.accept)
-        fade_out.start()
-
-        # 保存动画引用防止被垃圾回收
-        self._fade_out_animation = fade_out
-
-    def keyPressEvent(self, event):
-        """键盘事件处理"""
-        if event.key() == Qt.Key_Escape:
-            self.result_value = self.Cancel
-            self._fade_out_and_close()
-        elif event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            self.result_value = self.Yes
-            self._fade_out_and_close()
-        else:
-            super().keyPressEvent(event)
 
     # ============ 静态便捷方法 ============
 

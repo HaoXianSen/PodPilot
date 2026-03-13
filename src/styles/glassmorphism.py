@@ -287,6 +287,65 @@ class Styles:
         }
     """
 
+    # QMessageBox 弹窗样式 - 使用与主界面相同的渐变背景
+    MESSAGE_BOX = f"""
+        QMessageBox {{
+            background: qlineargradient(
+                x1:0, y1:0, x2:0, y2:1,
+                stop:0 {Colors.BG_GRADIENT_START},
+                stop:0.5 {Colors.BG_GRADIENT_MID},
+                stop:1 {Colors.BG_GRADIENT_END}
+            );
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+        }}
+        QMessageBox QLabel {{
+            color: {Colors.TEXT_PRIMARY};
+            font-size: 14px;
+            padding: 16px;
+            background: transparent;
+        }}
+        QMessageBox QPushButton {{
+            background-color: rgba(255, 255, 255, 0.15);
+            color: {Colors.TEXT_PRIMARY};
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 8px;
+            padding: 8px 20px;
+            min-width: 80px;
+            min-height: 32px;
+        }}
+        QMessageBox QPushButton:hover {{
+            background-color: rgba(255, 255, 255, 0.25);
+        }}
+        QMessageBox QPushButton:pressed {{
+            background-color: rgba(255, 255, 255, 0.2);
+        }}
+    """
+
+    # QDialog 透明标题栏辅助方法
+    @staticmethod
+    def setup_transparent_titlebar(dialog):
+        """为 QDialog 设置透明标题栏（macOS）"""
+        try:
+            from AppKit import (
+                NSWindow,
+                NSFullSizeContentViewWindowMask,
+                NSWindowTitleHidden,
+            )
+            import objc
+
+            ns_view = dialog.winId()
+            ns_window = objc.objc_object(c_void_p=ns_view).__int__()
+            ns_window = NSWindow.alloc().initWithWindowRef_(ns_window)
+
+            style_mask = ns_window.styleMask()
+            ns_window.setStyleMask_(style_mask | NSFullSizeContentViewWindowMask)
+            ns_window.setTitlebarAppearsTransparent_(True)
+            ns_window.setTitleVisibility_(NSWindowTitleHidden)
+            return True
+        except Exception:
+            return False
+
 
 class GlassmorphismStyle:
     """样式管理器"""
@@ -305,6 +364,7 @@ class GlassmorphismStyle:
                 Styles.TEXT_EDIT,
                 Styles.SCROLL_BAR,
                 Styles.STATUS_BAR,
+                Styles.MESSAGE_BOX,
             ]
         )
 
@@ -327,3 +387,27 @@ class GlassmorphismStyle:
             font-size: 11px;
             font-weight: 500;
         """
+
+    @staticmethod
+    def setup_transparent_titlebar(widget):
+        """为窗口/对话框设置透明标题栏（macOS）"""
+        try:
+            from AppKit import (
+                NSWindow,
+                NSFullSizeContentViewWindowMask,
+                NSWindowTitleHidden,
+            )
+            import objc
+
+            ns_view = widget.winId()
+            ns_window_ptr = objc.objc_object(c_void_p=ns_view).__int__()
+            ns_window = NSWindow.alloc().initWithWindowRef_(ns_window_ptr)
+
+            style_mask = ns_window.styleMask()
+            ns_window.setStyleMask_(style_mask | NSFullSizeContentViewWindowMask)
+            ns_window.setTitlebarAppearsTransparent_(True)
+            ns_window.setTitleVisibility_(NSWindowTitleHidden)
+            return True
+        except Exception as e:
+            print(f"透明标题栏设置失败: {e}")
+            return False

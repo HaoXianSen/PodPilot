@@ -25,9 +25,40 @@ class GitService:
 
     @staticmethod
     def get_remote_tags(local_path: str) -> List[str]:
-        """获取远程Tag列表"""
-        import re
+        """获取远程Tag列表，按创建时间倒序排列（最新的在前）"""
+        # 方案1：先 fetch tags 到本地，然后按时间排序
+        try:
+            # 静默 fetch，不显示输出
+            subprocess.run(
+                ["git", "fetch", "--tags", "--quiet"],
+                cwd=local_path,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,  # 即使失败也继续
+            )
 
+            # 使用本地 tag 命令按创建时间排序
+            tag_result = subprocess.run(
+                ["git", "tag", "--sort=-creatordate"],
+                cwd=local_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            if tag_result.returncode == 0 and tag_result.stdout.strip():
+                remote_tags = [
+                    tag.strip()
+                    for tag in tag_result.stdout.strip().split("\n")
+                    if tag.strip()
+                ]
+                return remote_tags
+
+        except (subprocess.CalledProcessError, Exception):
+            pass
+
+        # 方案2：回退到 ls-remote（无排序）
         try:
             result = subprocess.run(
                 ["git", "ls-remote", "--tags", "origin"],
@@ -44,17 +75,14 @@ class GitService:
             for ref in remote_refs:
                 if ref and "\t" in ref:
                     tag_name = ref.split("\t")[1].replace("refs/tags/", "")
+                    # 跳过 annotated tag 的 ^{} 引用
                     if "^{}" in tag_name:
                         continue
-                    if re.match(r"v?\d+\.\d+\.\d+", tag_name):
-                        remote_tags.append(tag_name)
-
-            remote_tags.sort(
-                key=lambda x: [int(v) for v in re.findall(r"\d+", x)], reverse=True
-            )
+                    # 允许所有 tag
+                    remote_tags.append(tag_name)
 
             return remote_tags
-        except subprocess.CalledProcessError:
+        except (subprocess.CalledProcessError, Exception):
             return []
 
     @staticmethod

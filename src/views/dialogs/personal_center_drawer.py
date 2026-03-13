@@ -210,7 +210,7 @@ class PersonalCenterDrawer(QWidget):
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(existing_config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存配置失败: {str(e)}")
+            ModernDialog.error(self, "错误", f"保存配置失败: {str(e)}")
 
     def get_git_username(self):
         """获取Git用户名"""
@@ -875,7 +875,7 @@ class PersonalCenterDrawer(QWidget):
         gitlab_token = self.gitlab_token_input.text().strip()
 
         if not gitlab_token:
-            QMessageBox.warning(self, "提示", "请先配置 GitLab Token")
+            ModernDialog.warning(self, "提示", "请先配置 GitLab Token")
             return
 
         gitlab_host = "gitlab.corp.youdao.com"
