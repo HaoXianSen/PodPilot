@@ -145,6 +145,23 @@ class MRInfoCollector(QThread):
         except Exception:
             return None
 
+    def _get_recent_commits(self, local_path, count=3):
+        """获取最近的commit信息"""
+        try:
+            result = subprocess.run(
+                ["git", "log", f"-{count}", "--pretty=format:%s"],
+                capture_output=True,
+                text=True,
+                cwd=local_path,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                commits = result.stdout.strip().split("\n")
+                return [c.strip() for c in commits if c.strip()]
+            return []
+        except Exception:
+            return []
+
     def run(self):
         """收集Pod的Git信息"""
         pods_info = {}
@@ -189,12 +206,16 @@ class MRInfoCollector(QThread):
 
                 podfile_branch = self._get_pod_branches_from_podfile(pod_name)
 
+                # 获取最近3条commit信息
+                recent_commits = self._get_recent_commits(local_path, 3)
+
                 pods_info[pod_name] = {
                     "git_url": git_url,
                     "current_branch": current_branch,
                     "remote_branches": remote_branches,
                     "podfile_branch": podfile_branch,
                     "local_path": local_path,
+                    "recent_commits": recent_commits,
                 }
 
             except Exception as e:
@@ -228,6 +249,7 @@ class MRInfoCollector(QThread):
                 "remote_branches": main_remote_branches,
                 "podfile_branch": self.main_project_current_branch,
                 "is_main_project": True,
+                "recent_commits": self._get_recent_commits(self.project_dir, 3),
             }
 
         self.finished.emit(pods_info)
@@ -604,38 +626,74 @@ class MergeRequestDialog(BottomSheetDialog):
 
     def _build_content(self):
         """构建内容区域"""
-        # Token 配置区域
-        token_section = QFrame()
-        token_section.setObjectName("tokenSection")
-        token_section.setStyleSheet(f"""
-            QFrame#tokenSection {{
-                background-color: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 12px;
-                padding: 16px;
-            }}
-        """)
+        # 折叠式 Token 配置区域
+        self.token_section = QFrame()
+        self.token_section.setObjectName("tokenSection")
+        self._token_expanded = False
 
-        token_layout = QVBoxLayout(token_section)
-        token_layout.setSpacing(12)
+        token_layout = QVBoxLayout(self.token_section)
+        token_layout.setContentsMargins(12, 10, 12, 10)
+        token_layout.setSpacing(0)
 
-        token_title = QLabel("访问令牌配置")
-        token_title.setStyleSheet(f"""
+        # 折叠头部（始终显示）
+        self.token_header = QWidget()
+        self.token_header.setCursor(Qt.PointingHandCursor)
+        header_layout = QHBoxLayout(self.token_header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(8)
+
+        # 展开/折叠箭头
+        self.token_arrow = QLabel("▸")
+        self.token_arrow.setFixedWidth(14)
+        self.token_arrow.setStyleSheet(f"""
             QLabel {{
-                color: {Colors.TEXT_PRIMARY};
-                font-size: 14px;
-                font-weight: 600;
+                color: {Colors.TEXT_MUTED};
+                font-size: 12px;
                 background: transparent;
             }}
         """)
-        token_layout.addWidget(token_title)
+        header_layout.addWidget(self.token_arrow)
+
+        # 状态标签
+        self.token_status_label = QLabel("令牌配置")
+        self.token_status_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 13px;
+                font-weight: 500;
+                background: transparent;
+            }}
+        """)
+        header_layout.addWidget(self.token_status_label)
+
+        # 状态徽章
+        self.token_badge = QLabel()
+        self.token_badge.setStyleSheet(f"""
+            QLabel {{
+                font-size: 11px;
+                padding: 2px 8px;
+                border-radius: 4px;
+                background: transparent;
+            }}
+        """)
+        header_layout.addWidget(self.token_badge)
+
+        header_layout.addStretch()
+        token_layout.addWidget(self.token_header)
+
+        # 可折叠的输入区域
+        self.token_inputs = QWidget()
+        self.token_inputs.setVisible(False)
+        inputs_layout = QVBoxLayout(self.token_inputs)
+        inputs_layout.setContentsMargins(20, 12, 0, 4)
+        inputs_layout.setSpacing(10)
 
         # GitLab Token
         gitlab_row = QHBoxLayout()
         gitlab_row.setSpacing(12)
 
-        gitlab_label = QLabel("GitLab Token:")
-        gitlab_label.setFixedWidth(100)
+        gitlab_label = QLabel("GitLab:")
+        gitlab_label.setFixedWidth(55)
         gitlab_label.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
         )
@@ -645,16 +703,17 @@ class MergeRequestDialog(BottomSheetDialog):
         self.gitlab_token_input.setEchoMode(QLineEdit.Password)
         self.gitlab_token_input.setPlaceholderText("输入 GitLab 访问令牌")
         self.gitlab_token_input.setStyleSheet(Styles.LINE_EDIT)
+        self.gitlab_token_input.textChanged.connect(self._update_token_status)
         gitlab_row.addWidget(self.gitlab_token_input)
 
-        token_layout.addLayout(gitlab_row)
+        inputs_layout.addLayout(gitlab_row)
 
         # GitHub Token
         github_row = QHBoxLayout()
         github_row.setSpacing(12)
 
-        github_label = QLabel("GitHub Token:")
-        github_label.setFixedWidth(100)
+        github_label = QLabel("GitHub:")
+        github_label.setFixedWidth(55)
         github_label.setStyleSheet(
             f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
         )
@@ -664,11 +723,18 @@ class MergeRequestDialog(BottomSheetDialog):
         self.github_token_input.setEchoMode(QLineEdit.Password)
         self.github_token_input.setPlaceholderText("输入 GitHub 访问令牌")
         self.github_token_input.setStyleSheet(Styles.LINE_EDIT)
+        self.github_token_input.textChanged.connect(self._update_token_status)
         github_row.addWidget(self.github_token_input)
 
-        token_layout.addLayout(github_row)
+        inputs_layout.addLayout(github_row)
 
-        self.content_layout.addWidget(token_section)
+        token_layout.addWidget(self.token_inputs)
+
+        # 点击头部切换展开/折叠
+        self.token_header.mousePressEvent = lambda e: self._toggle_token_section()
+
+        self._update_token_section_style()
+        self.content_layout.addWidget(self.token_section)
 
         # 描述
         desc_label = QLabel("为每个项目配置 MR 信息")
@@ -743,6 +809,78 @@ class MergeRequestDialog(BottomSheetDialog):
                 color: {Colors.TEXT_PRIMARY};
             }}
         """)
+
+    def _toggle_token_section(self):
+        """切换令牌区域展开/折叠"""
+        self._token_expanded = not self._token_expanded
+        self.token_inputs.setVisible(self._token_expanded)
+        self.token_arrow.setText("▾" if self._token_expanded else "▸")
+        self._update_token_section_style()
+
+    def _update_token_section_style(self):
+        """更新令牌区域样式"""
+        if self._token_expanded:
+            self.token_section.setStyleSheet(f"""
+                QFrame#tokenSection {{
+                    background-color: rgba(255, 255, 255, 0.08);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 10px;
+                }}
+            """)
+        else:
+            self.token_section.setStyleSheet(f"""
+                QFrame#tokenSection {{
+                    background-color: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 10px;
+                }}
+                QFrame#tokenSection:hover {{
+                    background-color: rgba(255, 255, 255, 0.08);
+                }}
+            """)
+
+    def _update_token_status(self):
+        """更新令牌状态显示"""
+        gitlab_configured = bool(self.gitlab_token_input.text().strip())
+        github_configured = bool(self.github_token_input.text().strip())
+
+        if gitlab_configured and github_configured:
+            self.token_badge.setText("已配置")
+            self.token_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #34c759;
+                    font-size: 11px;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    background-color: rgba(52, 199, 89, 0.15);
+                    border: 1px solid rgba(52, 199, 89, 0.3);
+                }}
+            """)
+        elif gitlab_configured or github_configured:
+            configured = "GitLab" if gitlab_configured else "GitHub"
+            self.token_badge.setText(f"{configured} 已配置")
+            self.token_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #fbbf24;
+                    font-size: 11px;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    background-color: rgba(251, 191, 36, 0.15);
+                    border: 1px solid rgba(251, 191, 36, 0.3);
+                }}
+            """)
+        else:
+            self.token_badge.setText("未配置")
+            self.token_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: {Colors.TEXT_MUTED};
+                    font-size: 11px;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    background-color: rgba(255, 255, 255, 0.08);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                }}
+            """)
 
     def _create_pod_card(self, pod_name, info):
         """创建单个 Pod/项目 卡片"""
@@ -968,7 +1106,7 @@ class MergeRequestDialog(BottomSheetDialog):
         title_row.addWidget(title_input)
         card_layout.addLayout(title_row)
 
-        # MR 描述
+        # MR 描述（默认填充最近3条commit）
         desc_row = QHBoxLayout()
         desc_row.setSpacing(12)
 
@@ -979,7 +1117,15 @@ class MergeRequestDialog(BottomSheetDialog):
         )
         desc_row.addWidget(desc_label)
 
+        # 生成默认描述：最近3条commit
+        recent_commits = info.get("recent_commits", [])
+        default_desc = ""
+        if recent_commits:
+            default_desc = "最近提交: " + " | ".join(recent_commits)
+
         desc_input = QLineEdit()
+        if default_desc:
+            desc_input.setText(default_desc)
         desc_input.setPlaceholderText("简要描述此次合并...")
         desc_input.setStyleSheet(Styles.LINE_EDIT)
         desc_input.textChanged.connect(
@@ -1031,6 +1177,9 @@ class MergeRequestDialog(BottomSheetDialog):
             self.gitlab_token_input.setText(gitlab_token)
         if github_token:
             self.github_token_input.setText(github_token)
+
+        # 更新状态显示
+        self._update_token_status()
 
     def load_pods_info(self):
         """加载Pod信息，创建卡片"""
