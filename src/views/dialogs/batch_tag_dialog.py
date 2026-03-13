@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from src.widgets.loading_widget import LoadingWidget
+from src.widgets.loading_widget import ModernLoadingDialog
 from src.widgets.custom_dropdown import CustomDropdown
 from src.styles import Colors, Styles
 from src.components.modern_dialog import ModernDialog
@@ -121,7 +121,7 @@ class BatchTagDialog(BottomSheetDialog):
         self.pod_configs = {}
         self.pod_cards = []
         self.worker = None
-        self.loading_widget = None
+        self.loading_dialog = None
 
         super().__init__(parent, title="批量创建Tag", max_height_ratio=0.85)
 
@@ -472,40 +472,20 @@ class BatchTagDialog(BottomSheetDialog):
             selected_branch = branch_combo.currentText() if branch_combo.currentIndex() >= 0 else ""
             branch_selections[row] = selected_branch
 
-        loading_dialog = QWidget(self)
-        loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet(f"""
-            QWidget {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {Colors.BG_GRADIENT_START},
-                    stop:0.5 {Colors.BG_GRADIENT_MID},
-                    stop:1 {Colors.BG_GRADIENT_END}
-                );
-                border-radius: 12px;
-            }}
-        """)
-        self.loading_widget = LoadingWidget("创建中...")
-        loading_layout = QVBoxLayout()
-        loading_layout.addWidget(self.loading_widget)
-        loading_dialog.setLayout(loading_layout)
-        loading_dialog.show()
-        self.loading_widget.start_animation()
+        self.loading_dialog = ModernLoadingDialog("创建中...", parent=self, fullscreen=True)
+        self.loading_dialog.start()
 
         self.worker = TagCreationWorker(
             self.pods_info, self.pod_configs, branch_selections
         )
-        self.worker.finished.connect(
-            lambda result: self._on_tag_creation_finished(result, loading_dialog)
-        )
+        self.worker.finished.connect(self._on_tag_creation_finished)
         self.worker.setParent(None)
         self.worker.start()
 
-    def _on_tag_creation_finished(self, result, loading_dialog):
-        if self.loading_widget:
-            self.loading_widget.stop_animation()
-
-        loading_dialog.close()
+    def _on_tag_creation_finished(self, result):
+        if self.loading_dialog:
+            self.loading_dialog.stop()
+            self.loading_dialog = None
 
         success_count = result["success_count"]
         fail_count = result["fail_count"]

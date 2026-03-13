@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QBrush, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from src.widgets.loading_widget import LoadingWidget
+from src.widgets.loading_widget import ModernLoadingDialog
 from src.widgets.custom_dropdown import CustomDropdown
 from src.styles import Colors, Styles, GlassmorphismStyle
 from src.components.modern_dialog import ModernDialog
@@ -288,7 +288,7 @@ class BatchTagSwitchDialog(BottomSheetDialog):
         self.podfile_lines = podfile_lines
         self.tag_selections = {}
         self.worker = None
-        self.loading_widget = None
+        self.loading_dialog = None
         self.pod_cards = []
 
         super().__init__(parent, title="批量切换Tag", max_height_ratio=0.85)
@@ -572,43 +572,19 @@ class BatchTagSwitchDialog(BottomSheetDialog):
             return
 
         # 显示加载对话框
-        loading_dialog = QWidget(self)
-        loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet(f"""
-            QWidget {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {Colors.BG_GRADIENT_START},
-                    stop:0.5 {Colors.BG_GRADIENT_MID},
-                    stop:1 {Colors.BG_GRADIENT_END}
-                );
-                border-radius: 12px;
-            }}
-        """)
-
-        loading_layout = QVBoxLayout()
-        loading_layout.setContentsMargins(20, 20, 20, 20)
-
-        self.loading_widget = LoadingWidget("切换中...")
-        loading_layout.addWidget(self.loading_widget)
-
-        loading_dialog.setLayout(loading_layout)
-        loading_dialog.show()
-
-        self.loading_widget.start_animation()
+        self.loading_dialog = ModernLoadingDialog("切换中...", parent=self, fullscreen=True)
+        self.loading_dialog.start()
         QApplication.processEvents()
 
         # 启动工作线程
         self.worker = TagSwitchWorker(
             self.pods_info, self.tag_selections, self.podfile_path, self.podfile_lines
         )
-        self.worker.finished.connect(
-            lambda result: self._on_tag_switch_finished(result, loading_dialog)
-        )
+        self.worker.finished.connect(self._on_tag_switch_finished)
 
         self.worker.start()
 
-    def _on_tag_switch_finished(self, result, loading_dialog):
+    def _on_tag_switch_finished(self, result):
         """处理Tag切换完成"""
         # 清理线程引用
         if hasattr(self, "worker") and self.worker:
@@ -619,10 +595,9 @@ class BatchTagSwitchDialog(BottomSheetDialog):
             finally:
                 self.worker = None
 
-        if hasattr(self, "loading_widget"):
-            self.loading_widget.stop_animation()
-
-        loading_dialog.close()
+        if self.loading_dialog:
+            self.loading_dialog.stop()
+            self.loading_dialog = None
 
         success_count = result["success_count"]
         fail_count = result["fail_count"]

@@ -39,7 +39,7 @@ from src.views.dialogs.batch_tag_switch_dialog import BatchTagSwitchDialog
 from src.views.dialogs.branch_create_dialog import BranchCreateDialog
 from src.views.dialogs.batch_branch_dialog import BatchBranchDialog
 from src.views.dialogs.clean_cache_dialog import CleanCacheDialog
-from src.widgets.loading_widget import LoadingWidget
+from src.widgets.loading_widget import ModernLoadingDialog
 from src.views.dialogs.merge_request_dialog import MergeRequestDialog, MRInfoCollector
 from src.views.dialogs.personal_center_drawer import PersonalCenterDrawer
 from src.views.dialogs.project_mr_dialog import ProjectMRDialog
@@ -85,6 +85,8 @@ class PodPilot(QMainWindow):
         self.pod_install_service = PodInstallService(log_callback=self.log_message)
         self.pod_cache_service = PodCacheService(log_callback=self.log_message)
         self.podfile_reader = None  # 将在选择项目时初始化
+        self._is_pod_installing = False  # pod install 执行状态标记
+        self._pod_install_loading = None  # pod install loading 遮罩
 
         self.personal_config = self._load_personal_config()
 
@@ -1318,27 +1320,9 @@ class PodPilot(QMainWindow):
             ModernDialog.error(self, "错误", f"读取Podfile失败: {str(e)}")
             return
 
-        # 创建半透明遮罩层
-        loading_overlay = QWidget(self)
-        loading_overlay.setGeometry(0, 0, self.width(), self.height())
-        loading_overlay.setStyleSheet("""
-            QWidget {
-                background-color: rgba(0, 0, 0, 0.5);
-            }
-        """)
-        loading_overlay.setAttribute(Qt.WA_StyledBackground, True)
-        loading_overlay.show()
-        loading_overlay.raise_()
-
-        # 在遮罩层上放置LoadingWidget
-        self.loading_widget = LoadingWidget(
-            "加载远程Tag...", LoadingWidget.STYLE_SPINNER, loading_overlay
-        )
-        self.loading_widget.setGeometry(
-            (self.width() - 200) // 2, (self.height() - 120) // 2, 200, 120
-        )
-        self.loading_widget.show()
-        self.loading_widget.start_animation()
+        # 显示全屏loading遮罩
+        self.loading_dialog = ModernLoadingDialog("加载远程Tag...", parent=self, fullscreen=True)
+        self.loading_dialog.start()
 
         # 获取当前Pod配置
         current_config = self.get_current_pods_config()
@@ -1348,15 +1332,13 @@ class PodPilot(QMainWindow):
             current_items, current_config, self.get_pod_name_from_item
         )
         self.tag_loader.finished.connect(
-            lambda pods_info: self._on_tags_loaded(
-                pods_info, podfile_path, podfile_lines, loading_overlay
-            )
+            lambda pods_info: self._on_tags_loaded(pods_info, podfile_path, podfile_lines)
         )
 
         # 启动工作线程
         self.tag_loader.start()
 
-    def _on_tags_loaded(self, pods_info, podfile_path, podfile_lines, loading_overlay):
+    def _on_tags_loaded(self, pods_info, podfile_path, podfile_lines):
         """处理Tag数据加载完成"""
         # 清理线程引用
         if hasattr(self, "tag_loader") and self.tag_loader:
@@ -1368,12 +1350,10 @@ class PodPilot(QMainWindow):
             finally:
                 self.tag_loader = None
 
-        # 停止loading动画
-        if hasattr(self, "loading_widget"):
-            self.loading_widget.stop_animation()
-
-        # 移除遮罩层
-        loading_overlay.deleteLater()
+        # 停止loading
+        if hasattr(self, "loading_dialog") and self.loading_dialog:
+            self.loading_dialog.stop()
+            self.loading_dialog = None
 
         if not pods_info:
             ModernDialog.warning(self, "警告", "没有可切换的Pod")
@@ -1574,27 +1554,9 @@ class PodPilot(QMainWindow):
             ModernDialog.warning(self, "警告", "未能自动选择branch引用的Pod")
             return
 
-        # 创建半透明遮罩层
-        self.loading_overlay = QWidget(self)
-        self.loading_overlay.setGeometry(0, 0, self.width(), self.height())
-        self.loading_overlay.setStyleSheet("""
-            QWidget {
-                background-color: rgba(0, 0, 0, 0.5);
-            }
-        """)
-        self.loading_overlay.setAttribute(Qt.WA_StyledBackground, True)
-        self.loading_overlay.show()
-        self.loading_overlay.raise_()
-
-        # 在遮罩层上放置LoadingWidget
-        self.loading_widget = LoadingWidget(
-            "加载Pod MR信息...", LoadingWidget.STYLE_SPINNER, self.loading_overlay
-        )
-        self.loading_widget.setGeometry(
-            (self.width() - 200) // 2, (self.height() - 120) // 2, 200, 120
-        )
-        self.loading_widget.show()
-        self.loading_widget.start_animation()
+        # 显示全屏loading遮罩
+        self.loading_dialog = ModernLoadingDialog("加载Pod MR信息...", parent=self, fullscreen=True)
+        self.loading_dialog.start()
 
         # 收集Pod信息
         pods_info_dict = {}
@@ -1666,14 +1628,10 @@ class PodPilot(QMainWindow):
                 finally:
                     self.mr_info_loader = None
 
-            # 停止loading动画并移除遮罩层
-            if hasattr(self, "loading_widget") and self.loading_widget is not None:
-                self.loading_widget.stop_animation()
-                self.loading_widget = None
-
-            if hasattr(self, "loading_overlay") and self.loading_overlay is not None:
-                self.loading_overlay.deleteLater()
-                self.loading_overlay = None
+            # 停止loading
+            if hasattr(self, "loading_dialog") and self.loading_dialog:
+                self.loading_dialog.stop()
+                self.loading_dialog = None
 
             # 过滤掉有错误的Pod，并提取主工程信息
             valid_pods_info = {}
@@ -1720,14 +1678,10 @@ class PodPilot(QMainWindow):
 
             self.log_message(f"错误: {error_msg}")
 
-            # 停止loading动画并移除遮罩层
-            if hasattr(self, "loading_widget") and self.loading_widget is not None:
-                self.loading_widget.stop_animation()
-                self.loading_widget = None
-
-            if hasattr(self, "loading_overlay") and self.loading_overlay is not None:
-                self.loading_overlay.deleteLater()
-                self.loading_overlay = None
+            # 停止loading
+            if hasattr(self, "loading_dialog") and self.loading_dialog:
+                self.loading_dialog.stop()
+                self.loading_dialog = None
 
             ModernDialog.error(self, "错误", error_msg)
         except Exception as e:
@@ -2004,171 +1958,6 @@ class PodPilot(QMainWindow):
             self.current_project, clean_pods, clean_lock, clean_cache
         )
 
-    def log_message(self, message):
-        self.log_output.append(message)
-
-    def run_pod_install(self):
-        if not self.current_project:
-            ModernDialog.warning(self, "警告", "请先选择项目")
-            return
-
-        podfile_path = os.path.join(self.current_project, "Podfile")
-        if not os.path.exists(podfile_path):
-            ModernDialog.warning(self, "错误", "未找到Podfile")
-            return
-
-        self.log_message(f"项目路径: {self.current_project}")
-        self.log_message("正在运行 pod install...")
-
-        def on_pod_install_finished(exit_code, exit_status):
-            if exit_code == 0:
-                self.log_message("pod install 完成")
-                ModernDialog.information(self, "成功", "pod install 完成")
-            else:
-                self.log_message(f"pod install 失败，退出码: {exit_code}")
-                ModernDialog.warning(
-                    self, "警告", f"pod install 失败，请查看日志了解详情"
-                )
-
-        self.pod_install_service.set_finished_callback(on_pod_install_finished)
-        self.pod_install_service.run_pod_install(self.current_project)
-        """清理Pod缓存"""
-        if not self.current_project:
-            ModernDialog.warning(self, "警告", "请先选择项目")
-            return
-
-        # 创建清理选项对话框
-        dialog = QDialog(self)
-        dialog.setWindowTitle("清理Pod缓存")
-        dialog.resize(400, 250)
-
-        layout = QVBoxLayout()
-
-        # 添加说明
-        info_label = QLabel("请选择要清理的内容：")
-        info_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-        layout.addWidget(info_label)
-
-        # 添加复选框
-        checkbox_layout = QVBoxLayout()
-        self.clean_pods_cb = QCheckBox("删除 Pods 目录")
-        self.clean_pods_cb.setChecked(True)
-        self.clean_pods_cb.setStyleSheet("font-size: 12px;")
-        checkbox_layout.addWidget(self.clean_pods_cb)
-
-        self.clean_lock_cb = QCheckBox("删除 Podfile.lock 文件")
-        self.clean_lock_cb.setChecked(True)
-        self.clean_lock_cb.setStyleSheet("font-size: 12px;")
-        checkbox_layout.addWidget(self.clean_lock_cb)
-
-        self.clean_cache_cb = QCheckBox("清理 CocoaPods 缓存")
-        self.clean_cache_cb.setChecked(True)
-        self.clean_cache_cb.setStyleSheet("font-size: 12px;")
-        checkbox_layout.addWidget(self.clean_cache_cb)
-
-        # 添加警告
-        warning_label = QLabel("此操作不可逆，请谨慎选择！")
-        warning_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        warning_label.setWordWrap(True)
-        warning_label.setStyleSheet(
-            "color: #ff3b30; font-weight: bold; margin-top: 15px; padding: 8px; border: 1px solid #ff3b30; border-radius: 4px; background-color: #fff3f3;"
-        )
-        layout.addWidget(warning_label)
-
-        layout.addLayout(checkbox_layout)
-
-        # 添加按钮
-        btn_layout = QHBoxLayout()
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setProperty("type", "cancel")
-        cancel_btn.clicked.connect(dialog.reject)
-        ok_btn = QPushButton("开始清理")
-        ok_btn.setProperty("buttonType", "warning")
-        ok_btn.clicked.connect(dialog.accept)
-
-        btn_layout.addWidget(cancel_btn)
-        btn_layout.addWidget(ok_btn)
-        layout.addLayout(btn_layout)
-
-        dialog.setLayout(layout)
-
-        if dialog.exec_() != QDialog.Accepted:
-            return
-
-        # 获取用户选择
-        clean_pods = self.clean_pods_cb.isChecked()
-        clean_lock = self.clean_lock_cb.isChecked()
-        clean_cache = self.clean_cache_cb.isChecked()
-
-        if not clean_pods and not clean_lock and not clean_cache:
-            ModernDialog.information(self, "提示", "未选择任何清理项")
-            return
-
-        self.log_message("开始清理Pod缓存...")
-
-        try:
-            # 1. 删除Pods目录
-            if clean_pods:
-                pods_dir = os.path.join(self.current_project, "Pods")
-                if os.path.exists(pods_dir):
-                    self.log_message(f"删除Pods目录: {pods_dir}")
-                    shutil.rmtree(pods_dir)
-                    self.log_message("Pods目录已删除")
-                else:
-                    self.log_message("Pods目录不存在，跳过")
-
-            # 2. 删除Podfile.lock
-            if clean_lock:
-                lock_file = os.path.join(self.current_project, "Podfile.lock")
-                if os.path.exists(lock_file):
-                    self.log_message(f"删除Podfile.lock: {lock_file}")
-                    os.remove(lock_file)
-                    self.log_message("Podfile.lock已删除")
-                else:
-                    self.log_message("Podfile.lock不存在，跳过")
-
-            # 3. 清理CocoaPods缓存
-            if clean_cache:
-                self.log_message("清理CocoaPods缓存...")
-                process = QProcess(self)
-                process.setProcessEnvironment(QProcessEnvironment.systemEnvironment())
-
-                shell_cmd = """
-source ~/.rvm/scripts/rvm 2>/dev/null || source ~/.rvm/bin/rvm 2>/dev/null || true
-pod cache clean --all
-"""
-
-                # 设置输出回调
-                process.readyReadStandardOutput.connect(
-                    lambda: self.log_output.append(
-                        process.readAllStandardOutput().data().decode()
-                    )
-                )
-                process.readyReadStandardError.connect(
-                    lambda: self.log_output.append(
-                        process.readAllStandardError().data().decode()
-                    )
-                )
-                process.finished.connect(
-                    lambda exit_code, exit_status: self.on_cache_clean_finished(
-                        exit_code, clean_pods, clean_lock, clean_cache
-                    )
-                )
-
-                # 启动进程
-                user_shell = os.environ.get("SHELL", "/bin/zsh")
-                if not os.path.exists(user_shell):
-                    user_shell = "/bin/zsh"
-
-                process.start(user_shell, ["-l", "-c", shell_cmd])
-            else:
-                # 如果不需要清理缓存，直接显示完成
-                self.on_cache_clean_finished(0, clean_pods, clean_lock, clean_cache)
-
-        except Exception as e:
-            self.log_message(f"清理失败: {str(e)}")
-            ModernDialog.error(self, "错误", f"清理失败: {str(e)}")
-
     def on_cache_clean_finished(self, exit_code, clean_pods, clean_lock, clean_cache):
         """缓存清理完成回调"""
         summary_parts = []
@@ -2198,6 +1987,10 @@ pod cache clean --all
 
     def run_pod_install(self):
         """运行pod install"""
+        if self._is_pod_installing:
+            ModernDialog.warning(self, "警告", "pod install 正在执行中，请稍后")
+            return
+
         if not self.current_project:
             ModernDialog.warning(self, "警告", "请先选择项目")
             return
@@ -2207,8 +2000,16 @@ pod cache clean --all
             ModernDialog.warning(self, "错误", "未找到Podfile")
             return
 
+        self._is_pod_installing = True
         self.log_message(f"项目路径: {self.current_project}")
         self.log_message("正在运行 pod install...")
+
+        # 显示全屏 loading 遮罩
+        self._pod_install_loading = ModernLoadingDialog(
+            "正在执行 pod install...", parent=self, fullscreen=True
+        )
+        self._pod_install_loading.show()
+        self._pod_install_loading.raise_()
 
         # 使用QProcess异步执行，不阻塞主线程
         process = QProcess(self)
@@ -2250,12 +2051,20 @@ cd "{self.current_project}" && pod install
 
     def on_pod_install_finished(self, process, exit_code, exit_status):
         """pod install完成后的回调"""
+        self._is_pod_installing = False
+
+        # 隐藏 loading 遮罩
+        if self._pod_install_loading:
+            self._pod_install_loading.hide()
+            self._pod_install_loading.deleteLater()
+            self._pod_install_loading = None
+
         if exit_code == 0:
             self.log_message("pod install 完成")
             ModernDialog.information(self, "成功", "pod install 完成")
         else:
             self.log_message(f"pod install 失败，退出码: {exit_code}")
-            ModernDialog.warning(self, "警告", f"pod install 失败，请查看日志了解详情")
+            ModernDialog.warning(self, "警告", "pod install 失败，请查看日志了解详情")
 
         # 删除进程对象
         process.deleteLater()

@@ -17,7 +17,7 @@ from PyQt5.QtGui import QBrush, QColor, QPalette
 import os
 
 from src.services.git_service import GitService
-from src.widgets.loading_widget import LoadingWidget
+from src.widgets.loading_widget import ModernLoadingDialog
 from src.widgets.custom_dropdown import CustomDropdown
 from src.styles import Colors, Styles, GlassmorphismStyle
 from src.components.modern_dialog import ModernDialog
@@ -250,7 +250,7 @@ class BatchBranchDialog(BottomSheetDialog):
         self.branch_configs = {}
         self.git_urls = {}
         self.worker = None
-        self.loading_widget = None
+        self.loading_dialog = None
         self.pod_cards = []
 
         super().__init__(parent, title="批量切换到Branch模式", max_height_ratio=0.85)
@@ -573,33 +573,16 @@ class BatchBranchDialog(BottomSheetDialog):
         if reply != ModernDialog.Yes:
             return
 
-        loading_dialog = QWidget(self)
-        loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet(f"""
-            QWidget {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {Colors.BG_GRADIENT_START},
-                    stop:0.5 {Colors.BG_GRADIENT_MID},
-                    stop:1 {Colors.BG_GRADIENT_END}
-                );
-                border-radius: 12px;
-            }}
-        """)
-        self.loading_widget = LoadingWidget("切换中...")
-        loading_layout = QVBoxLayout()
-        loading_layout.addWidget(self.loading_widget)
-        loading_dialog.setLayout(loading_layout)
-        loading_dialog.show()
-        self.loading_widget.start_animation()
+        self.loading_dialog = ModernLoadingDialog("切换中...", parent=self, fullscreen=True)
+        self.loading_dialog.start()
 
         if not self.podfile_lines:
             try:
                 with open(self.podfile_path, "r", encoding="utf-8") as f:
                     self.podfile_lines = f.readlines()
             except Exception as e:
-                self.loading_widget.stop_animation()
-                loading_dialog.close()
+                self.loading_dialog.stop()
+                self.loading_dialog = None
                 ModernDialog.error(self, "错误", f"读取Podfile失败: {str(e)}")
                 return
 
@@ -611,16 +594,13 @@ class BatchBranchDialog(BottomSheetDialog):
             self.podfile_lines,
         )
         self.worker.setParent(None)
-        self.worker.finished.connect(
-            lambda result: self._on_branch_switch_finished(result, loading_dialog)
-        )
+        self.worker.finished.connect(self._on_branch_switch_finished)
         self.worker.start()
 
-    def _on_branch_switch_finished(self, result, loading_dialog):
-        if self.loading_widget:
-            self.loading_widget.stop_animation()
-
-        loading_dialog.close()
+    def _on_branch_switch_finished(self, result):
+        if self.loading_dialog:
+            self.loading_dialog.stop()
+            self.loading_dialog = None
 
         success_count = result["success_count"]
         fail_count = result["fail_count"]

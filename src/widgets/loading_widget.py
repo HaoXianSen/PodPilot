@@ -237,35 +237,65 @@ class LoadingWidget(QWidget):
 
 
 class ModernLoadingDialog(QWidget):
-    """现代化的Loading对话框（半透明遮罩）"""
+    """现代化的Loading对话框（支持全屏遮罩模式）"""
 
     def __init__(
-        self, text="加载中...", style=LoadingWidget.STYLE_SPINNER, parent=None
+        self, text="加载中...", style=LoadingWidget.STYLE_SPINNER, parent=None, fullscreen=False
     ):
         super().__init__(parent)
         self._loading_widget = LoadingWidget(text, style)
+        self._fullscreen = fullscreen
 
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(200, 120)
+        if fullscreen:
+            # 全屏遮罩模式 - 只有动画和文字，无卡片背景
+            self.setWindowFlags(Qt.FramelessWindowHint)
+            self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # 设置半透明背景
-        self.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(30, 30, 40, 0.95),
-                    stop:1 rgba(20, 20, 30, 0.95)
-                );
-                border-radius: 16px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-            }
-        """)
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addStretch()
+            layout.addWidget(self._loading_widget, 0, Qt.AlignCenter)
+            layout.addStretch()
+        else:
+            # 普通小窗口模式
+            self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
+            self.setAttribute(Qt.WA_TranslucentBackground)
+            self.setFixedSize(200, 120)
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.addWidget(self._loading_widget)
-        self.setLayout(layout)
+            self.setStyleSheet("""
+                QWidget {
+                    background: qlineargradient(
+                        x1:0, y1:0, x2:0, y2:1,
+                        stop:0 rgba(30, 30, 40, 0.95),
+                        stop:1 rgba(20, 20, 30, 0.95)
+                    );
+                    border-radius: 16px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                }
+            """)
+
+            layout = QVBoxLayout()
+            layout.setContentsMargins(20, 20, 20, 20)
+            layout.addWidget(self._loading_widget)
+            self.setLayout(layout)
+
+    def showEvent(self, event):
+        """显示时处理"""
+        super().showEvent(event)
+        if self._fullscreen and self.parent():
+            self.setGeometry(0, 0, self.parent().width(), self.parent().height())
+        self._loading_widget.start_animation()
+
+    def hideEvent(self, event):
+        """隐藏时停止动画"""
+        self._loading_widget.stop_animation()
+        super().hideEvent(event)
+
+    def paintEvent(self, event):
+        """绘制背景"""
+        if self._fullscreen:
+            painter = QPainter(self)
+            painter.fillRect(self.rect(), QColor(0, 0, 0, 120))
 
     def start(self):
         """显示并开始动画"""
@@ -276,7 +306,7 @@ class ModernLoadingDialog(QWidget):
     def stop(self):
         """停止动画并隐藏"""
         self._loading_widget.stop_animation()
-        self.close()
+        self.hide()
 
     def set_text(self, text):
         """设置文字"""
@@ -285,3 +315,17 @@ class ModernLoadingDialog(QWidget):
     def set_style(self, style):
         """设置样式"""
         self._loading_widget.set_style(style)
+
+    def mousePressEvent(self, event):
+        """阻止鼠标事件穿透（全屏模式）"""
+        if self._fullscreen:
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        """阻止键盘事件（全屏模式）"""
+        if self._fullscreen:
+            event.accept()
+        else:
+            super().keyPressEvent(event)

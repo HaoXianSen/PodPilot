@@ -20,6 +20,7 @@ from PyQt5.QtGui import (
     QPen,
     QPainterPath,
     QBrush,
+    QRadialGradient,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -29,13 +30,14 @@ from PyQt5.QtCore import (
     QTimer,
     pyqtSignal,
 )
+from PyQt5.QtSvg import QSvgRenderer
 from src.views.dialogs.my_mr_dialog import MyMRDialog
 from src.styles import Colors, Styles
 from src.resources.icons import IconManager
 
 
 class ClickableAvatar(QWidget):
-    """可点击的头像组件"""
+    """可点击的头像组件 - 与主界面头像风格一致"""
 
     clicked = pyqtSignal()
 
@@ -65,41 +67,54 @@ class ClickableAvatar(QWidget):
         h = self._size
 
         if self._pixmap and not self._pixmap.isNull():
+            # 自定义头像 - 圆形裁剪
             scaled = self._pixmap.scaled(
                 w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
             )
             clip_path = QPainterPath()
             clip_path.addEllipse(0, 0, w, h)
             painter.setClipPath(clip_path)
-            painter.drawPixmap(0, 0, scaled)
+            # 居中绘制
+            x = (scaled.width() - w) // 2
+            y = (scaled.height() - h) // 2
+            painter.drawPixmap(0, 0, scaled.copy(x, y, w, h))
         else:
-            painter.setBrush(QBrush(QColor(Colors.BRANCH)))
-            painter.setPen(QPen(QColor("transparent")))
+            # 默认头像 - 渐变背景 + 白色人形（与主界面一致）
+            gradient = QRadialGradient(w / 2, h / 2, w / 2)
+            gradient.setColorAt(0, QColor("#667eea"))
+            gradient.setColorAt(1, QColor("#764ba2"))
+            painter.setBrush(QBrush(gradient))
+            painter.setPen(Qt.NoPen)
             painter.drawEllipse(0, 0, w, h)
 
-            painter.setBrush(QBrush(QColor(Colors.TEXT_PRIMARY)))
-            head_w = int(w * 0.3)
-            head_h = int(h * 0.3)
+            # 白色人形图标
+            painter.setBrush(QBrush(QColor("white")))
+            # 头部
+            head_w = int(w * 0.28)
+            head_h = int(h * 0.28)
             head_x = (w - head_w) // 2
-            head_y = int(h * 0.12)
-            body_w = int(w * 0.5)
-            body_h = int(h * 0.4)
-            body_x = (w - body_w) // 2
-            body_y = int(h * 0.5)
+            head_y = int(h * 0.22)
             painter.drawEllipse(head_x, head_y, head_w, head_h)
+            # 身体
+            body_w = int(w * 0.44)
+            body_h = int(h * 0.33)
+            body_x = (w - body_w) // 2
+            body_y = int(h * 0.55)
             painter.drawEllipse(body_x, body_y, body_w, body_h)
 
+        # 悬停效果
         if self._hover:
             clip_path = QPainterPath()
             clip_path.addEllipse(0, 0, w, h)
             painter.setClipPath(clip_path)
             painter.setBrush(QBrush(QColor(0, 0, 0, 80)))
-            painter.setPen(QPen(QColor("transparent")))
+            painter.setPen(Qt.NoPen)
             painter.drawEllipse(0, 0, w, h)
 
-            painter.setPen(QPen(QColor(Colors.TEXT_PRIMARY)))
+            painter.setPen(QPen(QColor("white")))
             font = painter.font()
-            font.setPointSize(10)
+            font.setPointSize(11)
+            font.setBold(True)
             painter.setFont(font)
             painter.drawText(0, 0, w, h, Qt.AlignCenter, "编辑")
 

@@ -23,7 +23,7 @@ import urllib.parse
 
 from src.styles import Colors, Styles
 from src.components.modern_dialog import ModernDialog
-from src.widgets.loading_widget import LoadingWidget
+from src.widgets.loading_widget import ModernLoadingDialog
 from src.widgets.custom_dropdown import CustomDropdown
 from src.components.bottom_sheet_dialog import BottomSheetDialog
 
@@ -591,7 +591,7 @@ class MergeRequestDialog(BottomSheetDialog):
         self.config = config or {}
         self.mr_configs = {}
         self.mr_worker = None
-        self.loading_widget = None
+        self.loading_dialog = None
         self.pod_cards = []
 
         super().__init__(parent, title="创建 Merge Request", max_height_ratio=0.85)
@@ -1120,45 +1120,22 @@ class MergeRequestDialog(BottomSheetDialog):
             return
 
         # 显示loading对话框
-        loading_dialog = QWidget(self)
-        loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet(f"""
-            QWidget {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {Colors.BG_GRADIENT_START},
-                    stop:0.5 {Colors.BG_GRADIENT_MID},
-                    stop:1 {Colors.BG_GRADIENT_END}
-                );
-                border-radius: 12px;
-            }}
-        """)
-
-        loading_layout = QVBoxLayout()
-        loading_layout.setContentsMargins(20, 20, 20, 20)
-
-        self.loading_widget = LoadingWidget("提交中...")
-        loading_layout.addWidget(self.loading_widget)
-
-        loading_dialog.setLayout(loading_layout)
-        loading_dialog.show()
-
-        self.loading_widget.start_animation()
+        self.loading_dialog = ModernLoadingDialog("提交中...", parent=self, fullscreen=True)
+        self.loading_dialog.start()
         QApplication.processEvents()
 
         # 创建异步提交工作线程
         try:
             self.mr_worker = MRRequestWorker(mr_info)
-            self.mr_worker.finished.connect(
-                lambda result: self._on_mr_finished(result, loading_dialog)
-            )
+            self.mr_worker.finished.connect(self._on_mr_finished)
             self.mr_worker.start()
         except Exception as e:
-            if loading_dialog:
-                loading_dialog.close()
+            if self.loading_dialog:
+                self.loading_dialog.stop()
+                self.loading_dialog = None
             ModernDialog.error(self, "错误", f"无法创建MR工作线程: {str(e)}")
 
-    def _on_mr_finished(self, result, loading_dialog):
+    def _on_mr_finished(self, result):
         """处理MR提交完成"""
         # 清理线程引用
         if hasattr(self, "mr_worker") and self.mr_worker:
@@ -1169,10 +1146,9 @@ class MergeRequestDialog(BottomSheetDialog):
             finally:
                 self.mr_worker = None
 
-        if hasattr(self, "loading_widget"):
-            self.loading_widget.stop_animation()
-
-        loading_dialog.close()
+        if self.loading_dialog:
+            self.loading_dialog.stop()
+            self.loading_dialog = None
 
         success_count = result.get("success_count", 0)
         fail_count = result.get("fail_count", 0)
