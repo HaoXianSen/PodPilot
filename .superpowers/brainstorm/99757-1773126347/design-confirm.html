@@ -1,0 +1,127 @@
+<h2>设计方案确认</h2>
+<p class="subtitle">PodPilot UI 现代化重构 - Glassmorphism 暗色主题</p>
+
+<div class="section">
+  <h3>🎯 设计决策摘要</h3>
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0;">
+    <div style="background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 11px; color: #a5b4fc; margin-bottom: 4px;">视觉风格</div>
+      <div style="font-weight: 600; color: white;">Glassmorphism</div>
+    </div>
+    <div style="background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 11px; color: #a5b4fc; margin-bottom: 4px;">图标方案</div>
+      <div style="font-weight: 600; color: white;">SVG 矢量图标</div>
+    </div>
+    <div style="background: rgba(102, 126, 234, 0.2); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 8px; padding: 12px; text-align: center;">
+      <div style="font-size: 11px; color: #a5b4fc; margin-bottom: 4px;">主题支持</div>
+      <div style="font-weight: 600; color: white;">仅暗色</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>📐 配色系统</h3>
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0;">
+    <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px;">
+      <div style="width: 24px; height: 24px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 4px;"></div>
+      <div>
+        <div style="font-size: 11px; color: #a5b4fc;">背景渐变</div>
+        <div style="font-size: 10px; color: #8A8F98;">#667eea → #764ba2</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px;">
+      <div style="width: 24px; height: 24px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px;"></div>
+      <div>
+        <div style="font-size: 11px; color: #a5b4fc;">卡片背景</div>
+        <div style="font-size: 10px; color: #8A8F98;">rgba(255,255,255,0.15)</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px;">
+      <div style="width: 24px; height: 24px; background: #3b82f6; border-radius: 4px;"></div>
+      <div>
+        <div style="font-size: 11px; color: #a5b4fc;">Branch 标签</div>
+        <div style="font-size: 10px; color: #8A8F98;">#3b82f6</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px;">
+      <div style="width: 24px; height: 24px; background: #34c759; border-radius: 4px;"></div>
+      <div>
+        <div style="font-size: 11px; color: #a5b4fc;">Tag 标签</div>
+        <div style="font-size: 10px; color: #8A8F98;">#34c759</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px;">
+      <div style="width: 24px; height: 24px; background: #f97316; border-radius: 4px;"></div>
+      <div>
+        <div style="font-size: 11px; color: #a5b4fc;">Dev 标签</div>
+        <div style="font-size: 10px; color: #8A8F98;">#f97316</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>📁 文件结构</h3>
+  <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; font-family: monospace; font-size: 12px; color: #a5b4fc;">
+    <div>src/</div>
+    <div style="padding-left: 16px;">resources/</div>
+    <div style="padding-left: 32px; color: #34c759;">+ icons.py <span style="color: #8A8F98;"># SVG 图标模块</span></div>
+    <div style="padding-left: 16px;">styles/</div>
+    <div style="padding-left: 32px; color: #34c759;">+ __init__.py</div>
+    <div style="padding-left: 32px; color: #34c759;">+ glassmorphism.py <span style="color: #8A8F98;"># 样式定义</span></div>
+    <div style="padding-left: 16px;">views/</div>
+    <div style="padding-left: 32px; color: #f97316;">~ main_window.py <span style="color: #8A8F98;"># 主窗口样式重构</span></div>
+    <div style="padding-left: 32px; color: #f97316;">~ dialogs/personal_center_drawer.py</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>✅ 实施步骤</h3>
+  <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 16px;">
+    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+      <div style="background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">1</div>
+      <div>
+        <div style="font-weight: 500; color: white;">创建基础设施</div>
+        <div style="font-size: 12px; color: #8A8F98;">SVG 图标模块 + 样式系统</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+      <div style="background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">2</div>
+      <div>
+        <div style="font-weight: 500; color: white;">重构主窗口</div>
+        <div style="font-size: 12px; color: #8A8F98;">渐变背景 + Glassmorphism 卡片 + 按钮组</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+      <div style="background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">3</div>
+      <div>
+        <div style="font-weight: 500; color: white;">适配对话框</div>
+        <div style="font-size: 12px; color: #8A8F98;">个人中心抽屉 + 其他对话框</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <div style="background: #667eea; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">4</div>
+      <div>
+        <div style="font-weight: 500; color: white;">测试优化</div>
+        <div style="font-size: 12px; color: #8A8F98;">功能验证 + 性能检查</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>确认设计方案</h3>
+      <p>开始实施 UI 现代化重构</p>
+    </div>
+  </div>
+  <div class="option" data-choice="modify" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>需要调整</h3>
+      <p>在终端中说明需要修改的部分</p>
+    </div>
+  </div>
+</div>

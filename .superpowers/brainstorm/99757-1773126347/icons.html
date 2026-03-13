@@ -1,0 +1,74 @@
+<h2>图标替换方案</h2>
+<p class="subtitle">当前界面使用 emoji 作为图标，需要替换为更专业的方案</p>
+
+<div class="section">
+  <h3>当前使用的 Emoji 图标：</h3>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 12px;">
+    <div style="text-align: center;">
+      <div style="font-size: 24px; margin-bottom: 4px;">🚀</div>
+      <div style="font-size: 11px; color: #8A8F98;">应用标题</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-size: 24px; margin-bottom: 4px;">🔖</div>
+      <div style="font-size: 11px; color: #8A8F98;">一键 Tag</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-size: 24px; margin-bottom: 4px;">🔀</div>
+      <div style="font-size: 11px; color: #8A8F98;">一键 Branch</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-size: 24px; margin-bottom: 4px;">🔄</div>
+      <div style="font-size: 11px; color: #8A8F98;">一键 MR</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-size: 24px; margin-bottom: 4px;">📋</div>
+      <div style="font-size: 11px; color: #8A8F98;">查看工程 MR</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-size: 24px; margin-bottom: 4px;">👤</div>
+      <div style="font-size: 11px; color: #8A8F98;">用户头像</div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="svg-icons" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>SVG 矢量图标 (推荐)</h3>
+      <p>使用 Lucide 图标库，内联 SVG 路径</p>
+      <ul style="color: #8A8F98; font-size: 12px; margin-top: 8px; padding-left: 16px;">
+        <li>完美缩放，任意尺寸清晰</li>
+        <li>可自定义颜色和大小</li>
+        <li>无需额外文件依赖</li>
+        <li>与现代 UI 风格匹配</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="option" data-choice="text-only" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>纯文字按钮</h3>
+      <p>移除图标，仅保留文字标签</p>
+      <ul style="color: #8A8F98; font-size: 12px; margin-top: 8px; padding-left: 16px;">
+        <li>简洁清爽</li>
+        <li>减少视觉干扰</li>
+        <li>实现最简单</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="option" data-choice="keep-emoji" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>保留 Emoji</h3>
+      <p>维持当前状态，不修改图标</p>
+      <ul style="color: #8A8F98; font-size: 12px; margin-top: 8px; padding-left: 16px;">
+        <li>无需改动</li>
+        <li>跨平台显示可能不一致</li>
+        <li>与专业风格稍显不搭</li>
+      </ul>
+    </div>
+  </div>
+</div>
