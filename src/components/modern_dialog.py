@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ModernDialog - 现代化对话框组件
-替代 QMessageBox，提供 Glassmorphism 风格的对话框
+macOS 原生风格 - 左对齐布局 + 方形圆角图标
 """
 
 from PyQt5.QtWidgets import (
@@ -14,13 +14,13 @@ from PyQt5.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
 )
-from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve, QRect, QTimer
-from PyQt5.QtGui import QPainter, QPen, QColor, QBrush, QLinearGradient, QFont
+from PyQt5.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QPainter, QColor, QFont
 from src.styles import Colors
 
 
 class ModernDialog(QDialog):
-    """现代化对话框 - Glassmorphism 风格"""
+    """现代化对话框 - macOS 原生风格"""
 
     # 对话框类型
     TYPE_INFO = "info"
@@ -71,170 +71,192 @@ class ModernDialog(QDialog):
 
     def _calculate_height(self):
         """计算对话框高度"""
-        base_height = 240
-        # 根据消息长度调整
+        base_height = 160
         message_lines = len(self._message.split("\n"))
-        if message_lines > 3:
-            base_height += (message_lines - 3) * 20
-        return min(base_height, 600)
+        if message_lines > 2:
+            base_height += (message_lines - 2) * 20
+        # 根据消息长度估算行数
+        estimated_lines = len(self._message) // 40 + 1
+        if estimated_lines > message_lines:
+            base_height += (estimated_lines - message_lines) * 18
+        return min(base_height, 350)
+
+    def _get_icon_colors(self):
+        """获取图标背景色和前景色"""
+        colors = {
+            self.TYPE_INFO: ("rgba(59, 130, 246, 0.2)", "#3b82f6"),
+            self.TYPE_SUCCESS: ("rgba(52, 199, 89, 0.2)", "#34c759"),
+            self.TYPE_WARNING: ("rgba(251, 191, 36, 0.2)", "#fbbf24"),
+            self.TYPE_ERROR: ("rgba(248, 113, 113, 0.2)", "#f87171"),
+            self.TYPE_QUESTION: ("rgba(139, 92, 246, 0.2)", "#8b5cf6"),
+        }
+        return colors.get(self._dialog_type, ("rgba(59, 130, 246, 0.2)", "#3b82f6"))
+
+    def _get_button_color(self):
+        """获取主按钮颜色"""
+        colors = {
+            self.TYPE_INFO: "#3b82f6",
+            self.TYPE_SUCCESS: "#34c759",
+            self.TYPE_WARNING: "#f59e0b",
+            self.TYPE_ERROR: "#ef4444",
+            self.TYPE_QUESTION: "#3b82f6",
+        }
+        return colors.get(self._dialog_type, "#3b82f6")
+
+    def _get_icon_symbol(self):
+        """获取图标符号"""
+        symbols = {
+            self.TYPE_INFO: "i",
+            self.TYPE_SUCCESS: "✓",
+            self.TYPE_WARNING: "!",
+            self.TYPE_ERROR: "✕",
+            self.TYPE_QUESTION: "?",
+        }
+        return symbols.get(self._dialog_type, "i")
 
     def _init_ui(self):
         """初始化UI"""
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
         # 对话框容器
         container = QFrame()
         container.setObjectName("dialogContainer")
         container.setStyleSheet(f"""
             QFrame#dialogContainer {{
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(30, 30, 46, 0.95),
-                    stop:1 rgba(20, 20, 35, 0.95)
-                );
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 16px;
+                background-color: rgba(40, 40, 50, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 14px;
             }}
         """)
 
         container_layout = QVBoxLayout(container)
-        container_layout.setContentsMargins(24, 24, 24, 24)
-        container_layout.setSpacing(16)
+        container_layout.setContentsMargins(20, 20, 20, 20)
+        container_layout.setSpacing(20)
 
-        # 图标
-        icon_widget = self._create_icon()
-        icon_layout = QHBoxLayout()
-        icon_layout.addStretch()
-        icon_layout.addWidget(icon_widget)
-        icon_layout.addStretch()
-        container_layout.addLayout(icon_layout)
+        # 头部区域（图标 + 内容）
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(16)
+        header_layout.setAlignment(Qt.AlignTop)
+
+        # 方形圆角图标
+        icon_bg, icon_color = self._get_icon_colors()
+        icon_widget = IconWidget(self._dialog_type)
+        icon_widget.setFixedSize(48, 48)
+        header_layout.addWidget(icon_widget, 0, Qt.AlignTop)
+
+        # 内容区域
+        content_layout = QVBoxLayout()
+        content_layout.setSpacing(6)
 
         # 标题
         title_label = QLabel(self._title)
-        title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet(f"""
             QLabel {{
                 color: {Colors.TEXT_PRIMARY};
-                font-size: 18px;
+                font-size: 15px;
                 font-weight: 600;
                 background: transparent;
                 border: none;
             }}
         """)
-        container_layout.addWidget(title_label)
+        content_layout.addWidget(title_label)
 
         # 消息
         message_label = QLabel(self._message)
-        message_label.setAlignment(Qt.AlignCenter)
         message_label.setWordWrap(True)
         message_label.setStyleSheet(f"""
             QLabel {{
-                color: rgba(255, 255, 255, 0.85);
+                color: rgba(255, 255, 255, 0.6);
                 font-size: 13px;
-                line-height: 1.6;
+                line-height: 1.5;
                 background: transparent;
                 border: none;
             }}
         """)
-        container_layout.addWidget(message_label)
+        content_layout.addWidget(message_label)
+
+        header_layout.addLayout(content_layout, 1)
+        container_layout.addLayout(header_layout)
 
         # 按钮区域
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(12)
+        button_layout.setSpacing(10)
         button_layout.addStretch()
 
         for i, btn_text in enumerate(self._buttons):
-            is_primary = i == len(self._buttons) - 1  # 最后一个按钮是主按钮
+            is_primary = i == len(self._buttons) - 1
             btn = self._create_button(btn_text, is_primary)
             button_layout.addWidget(btn)
 
         container_layout.addLayout(button_layout)
-
         main_layout.addWidget(container)
-
-    def _create_icon(self):
-        """创建图标"""
-        icon_widget = IconWidget(self._dialog_type)
-        icon_widget.setFixedSize(60, 60)
-        return icon_widget
 
     def _create_button(self, text, is_primary=False):
         """创建按钮"""
         btn = QPushButton(text)
-        btn.setFixedHeight(40)
-        btn.setMinimumWidth(100)
+        btn.setFixedHeight(32)
+        btn.setMinimumWidth(72)
         btn.setCursor(Qt.PointingHandCursor)
 
         if is_primary:
-            # 主按钮样式（根据对话框类型调整颜色）
-            color = self._get_type_color()
+            color = self._get_button_color()
+            # 警告类型使用深色文字
+            text_color = "#000" if self._dialog_type == self.TYPE_WARNING else "#fff"
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {color}40;
-                    color: {Colors.TEXT_PRIMARY};
-                    border: 1px solid {color}99;
+                    background-color: {color};
+                    color: {text_color};
+                    border: none;
                     border-radius: 8px;
-                    padding: 10px 24px;
-                    font-size: 13px;
-                    font-weight: 600;
-                }}
-                QPushButton:hover {{
-                    background-color: {color}55;
-                    border-color: {color}cc;
-                }}
-                QPushButton:pressed {{
-                    background-color: {color}35;
-                }}
-            """)
-        else:
-            # 次按钮样式
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: rgba(255, 255, 255, 0.1);
-                    color: rgba(255, 255, 255, 0.8);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    border-radius: 8px;
-                    padding: 10px 24px;
+                    padding: 6px 18px;
                     font-size: 13px;
                     font-weight: 500;
                 }}
                 QPushButton:hover {{
-                    background-color: rgba(255, 255, 255, 0.18);
-                    border-color: rgba(255, 255, 255, 0.3);
+                    background-color: {color};
+                    opacity: 0.9;
                 }}
                 QPushButton:pressed {{
+                    background-color: {color};
+                    opacity: 0.8;
+                }}
+            """)
+        else:
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: rgba(255, 255, 255, 0.08);
+                    color: rgba(255, 255, 255, 0.8);
+                    border: none;
+                    border-radius: 8px;
+                    padding: 6px 18px;
+                    font-size: 13px;
+                    font-weight: 500;
+                }}
+                QPushButton:hover {{
                     background-color: rgba(255, 255, 255, 0.12);
+                }}
+                QPushButton:pressed {{
+                    background-color: rgba(255, 255, 255, 0.06);
                 }}
             """)
 
         # 连接信号
-        if text in ["确定", "完成", "是", "继续"]:
+        if text in ["确定", "完成", "是", "继续", "好"]:
             btn.clicked.connect(lambda: self._on_button_clicked(self.Yes))
         else:
             btn.clicked.connect(lambda: self._on_button_clicked(self.No))
 
         return btn
 
-    def _get_type_color(self):
-        """根据类型获取颜色"""
-        colors = {
-            self.TYPE_INFO: "#3b82f6",
-            self.TYPE_SUCCESS: "#34c759",
-            self.TYPE_WARNING: "#fbbf24",
-            self.TYPE_ERROR: "#f87171",
-            self.TYPE_QUESTION: "#8b5cf6",
-        }
-        return colors.get(self._dialog_type, "#3b82f6")
-
     def _setup_animations(self):
         """设置动画"""
-        # 淡入动画
         self.opacity_effect = QGraphicsOpacityEffect()
         self.setGraphicsEffect(self.opacity_effect)
 
         self.fade_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade_animation.setDuration(200)
+        self.fade_animation.setDuration(150)
         self.fade_animation.setStartValue(0.0)
         self.fade_animation.setEndValue(1.0)
         self.fade_animation.setEasingCurve(QEasingCurve.OutCubic)
@@ -252,14 +274,12 @@ class ModernDialog(QDialog):
     def _fade_out_and_close(self):
         """淡出动画并关闭"""
         fade_out = QPropertyAnimation(self.opacity_effect, b"opacity")
-        fade_out.setDuration(150)
+        fade_out.setDuration(100)
         fade_out.setStartValue(1.0)
         fade_out.setEndValue(0.0)
         fade_out.setEasingCurve(QEasingCurve.InCubic)
         fade_out.finished.connect(self.accept)
         fade_out.start()
-
-        # 保存动画引用防止被垃圾回收
         self._fade_out_animation = fade_out
 
     # ============ 静态方法（兼容 QMessageBox API） ============
@@ -268,9 +288,7 @@ class ModernDialog(QDialog):
     def information(parent, title, message):
         """信息提示对话框"""
         dialog = ModernDialog(
-            parent,
-            title,
-            message,
+            parent, title, message,
             dialog_type=ModernDialog.TYPE_INFO,
             buttons=["确定"],
         )
@@ -280,9 +298,7 @@ class ModernDialog(QDialog):
     def success(parent, title, message):
         """成功提示对话框"""
         dialog = ModernDialog(
-            parent,
-            title,
-            message,
+            parent, title, message,
             dialog_type=ModernDialog.TYPE_SUCCESS,
             buttons=["完成"],
         )
@@ -292,9 +308,7 @@ class ModernDialog(QDialog):
     def warning(parent, title, message):
         """警告对话框"""
         dialog = ModernDialog(
-            parent,
-            title,
-            message,
+            parent, title, message,
             dialog_type=ModernDialog.TYPE_WARNING,
             buttons=["确定"],
         )
@@ -304,28 +318,23 @@ class ModernDialog(QDialog):
     def error(parent, title, message):
         """错误对话框"""
         dialog = ModernDialog(
-            parent,
-            title,
-            message,
+            parent, title, message,
             dialog_type=ModernDialog.TYPE_ERROR,
             buttons=["确定"],
         )
         dialog.exec_()
 
     @staticmethod
-    def question(parent, title, message):
+    def question(parent, title, message, buttons=None, default_button=None):
         """确认对话框（返回 Yes 或 No）"""
         dialog = ModernDialog(
-            parent,
-            title,
-            message,
+            parent, title, message,
             dialog_type=ModernDialog.TYPE_QUESTION,
             buttons=["取消", "确定"],
         )
         dialog.exec_()
         return dialog.result_value
 
-    # 兼容 QMessageBox.critical
     @staticmethod
     def critical(parent, title, message):
         """错误对话框（兼容 QMessageBox.critical）"""
@@ -333,12 +342,12 @@ class ModernDialog(QDialog):
 
 
 class IconWidget(QWidget):
-    """对话框图标组件 - 渐变圆形背景 + 符号"""
+    """方形圆角图标组件"""
 
     def __init__(self, dialog_type, parent=None):
         super().__init__(parent)
         self._type = dialog_type
-        self.setFixedSize(60, 60)
+        self.setFixedSize(48, 48)
 
     def paintEvent(self, event):
         """绘制图标"""
@@ -347,116 +356,34 @@ class IconWidget(QWidget):
 
         # 获取类型颜色
         colors = {
-            ModernDialog.TYPE_INFO: ("#3b82f6", "#2563eb"),
-            ModernDialog.TYPE_SUCCESS: ("#34c759", "#22c55e"),
-            ModernDialog.TYPE_WARNING: ("#fbbf24", "#f59e0b"),
-            ModernDialog.TYPE_ERROR: ("#f87171", "#ef4444"),
-            ModernDialog.TYPE_QUESTION: ("#8b5cf6", "#7c3aed"),
+            ModernDialog.TYPE_INFO: ("#3b82f6", "rgba(59, 130, 246, 0.2)"),
+            ModernDialog.TYPE_SUCCESS: ("#34c759", "rgba(52, 199, 89, 0.2)"),
+            ModernDialog.TYPE_WARNING: ("#fbbf24", "rgba(251, 191, 36, 0.2)"),
+            ModernDialog.TYPE_ERROR: ("#f87171", "rgba(248, 113, 113, 0.2)"),
+            ModernDialog.TYPE_QUESTION: ("#8b5cf6", "rgba(139, 92, 246, 0.2)"),
         }
-        color_light, color_dark = colors.get(self._type, ("#3b82f6", "#2563eb"))
+        fg_color, bg_color = colors.get(self._type, ("#3b82f6", "rgba(59, 130, 246, 0.2)"))
 
-        # 绘制渐变圆形背景
-        gradient = QLinearGradient(0, 0, 0, 60)
-        gradient.setColorAt(0, QColor(color_light))
-        gradient.setColorAt(1, QColor(color_dark))
-
+        # 绘制圆角矩形背景
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QBrush(gradient))
-        painter.drawEllipse(0, 0, 60, 60)
+        painter.setBrush(QColor(fg_color))
+        painter.setOpacity(0.2)
+        painter.drawRoundedRect(0, 0, 48, 48, 12, 12)
 
         # 绘制图标符号
-        painter.setPen(QPen(QColor(255, 255, 255), 3, Qt.SolidLine, Qt.RoundCap))
-        center_x, center_y = 30, 30
+        painter.setOpacity(1.0)
+        painter.setPen(QColor(fg_color))
 
-        if self._type == ModernDialog.TYPE_INFO:
-            # 绘制 i 符号
-            painter.drawEllipse(center_x - 2, center_y - 15, 4, 4)
-            painter.drawLine(center_x, center_y - 7, center_x, center_y + 12)
+        symbols = {
+            ModernDialog.TYPE_INFO: "i",
+            ModernDialog.TYPE_SUCCESS: "✓",
+            ModernDialog.TYPE_WARNING: "!",
+            ModernDialog.TYPE_ERROR: "✕",
+            ModernDialog.TYPE_QUESTION: "?",
+        }
+        symbol = symbols.get(self._type, "i")
 
-        elif self._type == ModernDialog.TYPE_SUCCESS:
-            # 绘制 ✓ 符号
-            painter.drawLine(center_x - 10, center_y, center_x - 3, center_y + 8)
-            painter.drawLine(center_x - 3, center_y + 8, center_x + 12, center_y - 8)
-
-        elif self._type == ModernDialog.TYPE_WARNING:
-            # 绘制 ! 符号
-            painter.drawLine(center_x, center_y - 12, center_x, center_y + 2)
-            painter.drawEllipse(center_x - 2, center_y + 8, 4, 4)
-
-        elif self._type == ModernDialog.TYPE_ERROR:
-            # 绘制 × 符号
-            painter.drawLine(center_x - 8, center_y - 8, center_x + 8, center_y + 8)
-            painter.drawLine(center_x + 8, center_y - 8, center_x - 8, center_y + 8)
-
-        elif self._type == ModernDialog.TYPE_QUESTION:
-            # 绘制 ? 符号
-            painter.setFont(QFont("Arial", 24, QFont.Bold))
-            painter.drawText(self.rect(), Qt.AlignCenter, "?")
-
-    # ============ 静态便捷方法 ============
-
-    @staticmethod
-    def information(parent, title, message):
-        """信息提示对话框"""
-        dialog = ModernDialog(
-            parent,
-            title,
-            message,
-            dialog_type=ModernDialog.TYPE_INFO,
-            buttons=["确定"],
-        )
-        dialog.exec_()
-
-    @staticmethod
-    def success(parent, title, message):
-        """成功提示对话框"""
-        dialog = ModernDialog(
-            parent,
-            title,
-            message,
-            dialog_type=ModernDialog.TYPE_SUCCESS,
-            buttons=["完成"],
-        )
-        dialog.exec_()
-
-    @staticmethod
-    def warning(parent, title, message):
-        """警告对话框"""
-        dialog = ModernDialog(
-            parent,
-            title,
-            message,
-            dialog_type=ModernDialog.TYPE_WARNING,
-            buttons=["确定"],
-        )
-        dialog.exec_()
-
-    @staticmethod
-    def error(parent, title, message):
-        """错误对话框"""
-        dialog = ModernDialog(
-            parent,
-            title,
-            message,
-            dialog_type=ModernDialog.TYPE_ERROR,
-            buttons=["确定"],
-        )
-        dialog.exec_()
-
-    @staticmethod
-    def question(parent, title, message):
-        """确认对话框（返回 Yes 或 No）"""
-        dialog = ModernDialog(
-            parent,
-            title,
-            message,
-            dialog_type=ModernDialog.TYPE_QUESTION,
-            buttons=["取消", "确定"],
-        )
-        dialog.exec_()
-        return dialog.result_value
-
-    @staticmethod
-    def critical(parent, title, message):
-        """错误对话框（兼容 QMessageBox.critical）"""
-        ModernDialog.error(parent, title, message)
+        font = QFont("SF Pro", 22)
+        font.setWeight(QFont.Bold)
+        painter.setFont(font)
+        painter.drawText(self.rect(), Qt.AlignCenter, symbol)
