@@ -3,43 +3,34 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QLabel,
     QLineEdit,
-    QGridLayout,
-    QDialog,
     QVBoxLayout,
-    QGroupBox,
-    QTextEdit,
-    QMessageBox,
-    QComboBox,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QAbstractItemView,
+    QFrame,
     QWidget,
-    QStyle,
+    QScrollArea,
+    QSizePolicy,
     QApplication,
 )
-from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from src.widgets.loading_widget import LoadingWidget
+from src.widgets.custom_dropdown import CustomDropdown
+from src.styles import Colors, Styles
+from src.components.modern_dialog import ModernDialog
+from src.components.bottom_sheet_dialog import BottomSheetDialog
 import subprocess
 import os
 import re
 
 
 class TagCreationWorker(QThread):
-    """异步创建Tag的工作线程"""
-
-    finished = pyqtSignal(
-        dict
-    )  # 发送结果：{'success_count': int, 'fail_count': int, 'error_messages': list}
+    finished = pyqtSignal(dict)
 
     def __init__(self, pods_info, pod_configs, branch_selections):
         super().__init__()
         self.pods_info = pods_info
         self.pod_configs = pod_configs
-        self.branch_selections = branch_selections  # {row: selected_branch}
+        self.branch_selections = branch_selections
 
     def _clean_tag_name(self, tag_name):
-        """清理Tag名称，移除(推荐)后缀"""
         if not tag_name:
             return tag_name
         return tag_name.replace(" (推荐)", "").strip()
@@ -54,24 +45,20 @@ class TagCreationWorker(QThread):
             pod_name = pod_info["name"]
             local_path = pod_info["path"]
 
-            # 获取Tag名称
             tag_name = self._clean_tag_name(
                 self.pod_configs.get(row, {}).get("tag_name", "").strip()
             )
             if not tag_name:
                 continue
 
-            # 获取Tag消息
             tag_message = self.pod_configs.get(row, {}).get("tag_message", "").strip()
             if not tag_message:
                 tag_message = f"Release {tag_name}"
 
-            # 获取选中的分支
             selected_branch = self.branch_selections.get(row, "")
 
             try:
                 if selected_branch and selected_branch != "无分支":
-                    # 先fetch远程仓库，确保远程分支信息最新
                     subprocess.run(
                         ["git", "fetch", "origin"],
                         capture_output=True,
@@ -79,7 +66,6 @@ class TagCreationWorker(QThread):
                         check=True,
                     )
 
-                    # 直接基于远程分支创建tag
                     remote_branch = (
                         f"origin/{selected_branch}"
                         if not selected_branch.startswith("origin/")
@@ -99,14 +85,12 @@ class TagCreationWorker(QThread):
                         check=True,
                     )
                 else:
-                    # 如果没有选择分支，基于当前HEAD创建tag
                     subprocess.run(
                         ["git", "tag", "-a", tag_name, "-m", tag_message],
                         cwd=local_path,
                         check=True,
                     )
 
-                # 推送tag到远程
                 subprocess.run(
                     ["git", "push", "origin", tag_name],
                     capture_output=True,
@@ -129,357 +113,314 @@ class TagCreationWorker(QThread):
         )
 
 
-class BatchTagDialog(QDialog):
-    def __init__(self, pods_info, parent=None):
-        """
-        pods_info: list of dict, each dict contains:
-        {
-            'name': pod_name,
-            'path': local_path,
-            'branches': list of branches,
-            'current_branch': current branch name
-        }
-        """
-        super().__init__(parent)
-        self.pods_info = pods_info
-        self.current_row = 0
-        self.initUI()
-        self.load_pods_info()
+class BatchTagDialog(BottomSheetDialog):
+    """批量创建Tag对话框 - 卡片列表式"""
 
-    def initUI(self):
-        self.setWindowTitle("批量创建Tag")
-        self.setGeometry(200, 200, 1400, 700)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f7;
-            }
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 8px 16px;
-                font-size: 13px;
-                min-height: 24px;
-            }
-            QPushButton:hover {
-                background-color: #0051d5;
-            }
-            QPushButton[type="cancel"] {
-                background-color: #e8e8ed;
-                color: #1d1d1f;
-            }
-            QPushButton[type="cancel"]:hover {
-                background-color: #d1d1d6;
-            }
-            QLabel {
-                color: #86868b;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            QLineEdit {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 8px 12px;
-                background-color: white;
-                min-height: 32px;
-                font-size: 13px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #007aff;
-            }
-            QTextEdit {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 8px;
-                background-color: white;
-                font-size: 13px;
-            }
-            QComboBox {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                padding: 2px 10px;
-                background-color: white;
-                min-height: 20px;
-                font-size: 12px;
-                color: #1d1d1f;
-            }
-            QComboBox:hover {
-                border-color: #007aff;
-            }
-            QComboBox:focus {
-                border-color: #007aff;
-                border-width: 2px;
-                padding: 1px 9px;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
+    def __init__(self, pods_info, parent=None):
+        self.pods_info = pods_info
+        self.pod_configs = {}
+        self.pod_cards = []
+        self.worker = None
+        self.loading_widget = None
+
+        super().__init__(parent, title="批量创建Tag", max_height_ratio=0.85)
+
+        self._build_content()
+        self._apply_content_styles()
+        self.load_pods_info()
+        self.setup_sheet_ui()
+
+    def _build_content(self):
+        desc_label = QLabel(
+            '为每个 Pod 设置 Tag 名称和消息，基于选择的分支创建'
+        )
+        desc_label.setStyleSheet(
+            f"color: {Colors.TEXT_MUTED}; font-size: 12px; background: transparent; border: none;"
+        )
+        self.content_layout.addWidget(desc_label)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{
                 background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxwYXRoIGZpbGw9IiM4Njg2OGIiIGQ9Ik0yIDJsMyAzaDNsLTItMi0yIDItMyAzeiIgLz48L3N2Zz4=);
-                width: 10px;
-                height: 10px;
-            }
-            QComboBox QAbstractItemView {
-                border: 1px solid #d1d1d6;
-                border-radius: 6px;
-                background-color: white;
-                selection-background-color: #007aff;
-                selection-color: white;
-                font-size: 12px;
-                padding: 4px;
-            }
-            QGroupBox {
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding-top: 12px;
-                background-color: white;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 4px;
-                font-weight: 600;
-            }
-            QTableWidget {
-                border: 1px solid #d1d1d6;
-                border-radius: 8px;
-                background-color: white;
-                gridline-color: #e0e0e0;
-                alternate-background-color: #fafafa;
-            }
-            QTableWidget::item {
-                padding: 4px 8px;
-            }
-            QHeaderView::section {
-                background-color: #f5f5f7;
-                padding: 8px;
                 border: none;
-                border-bottom: 2px solid #e0e0e0;
-                font-weight: bold;
-            }
+            }}
+            QScrollBar:vertical {{
+                border: none;
+                background: transparent;
+                width: 8px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba(255, 255, 255, 0.2);
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgba(255, 255, 255, 0.3);
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
         """)
 
-        layout = QVBoxLayout()
+        self.cards_container = QWidget()
+        self.cards_container.setStyleSheet("background: transparent; border: none;")
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 12, 0)
+        self.cards_layout.setSpacing(12)
 
-        # 表格区域
-        table_group = QGroupBox("Pod列表（点击选择行查看/编辑Tag消息）")
-        table_layout = QVBoxLayout()
+        self.scroll_area.setWidget(self.cards_container)
+        self.content_layout.addWidget(self.scroll_area, 1)
 
-        self.pod_table = QTableWidget()
-        self.pod_table.setColumnCount(5)
-        self.pod_table.setHorizontalHeaderLabels(
-            ["Pod名称", "当前分支", "选择分支", "已有Tag", "Tag名称"]
+        self.confirm_btn.setText("批量创建Tag")
+        self.confirm_btn.clicked.disconnect()
+        self.confirm_btn.clicked.connect(self.create_all_tags)
+
+    def _apply_content_styles(self):
+        self.setStyleSheet(f"""
+            QComboBox QAbstractItemView {{
+                background-color: #1a1a2e;
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 6px;
+                padding: 4px;
+                outline: none;
+            }}
+            QComboBox QAbstractItemView::item {{
+                padding: 6px 10px;
+                min-height: 24px;
+            }}
+            QComboBox QAbstractItemView::item:selected {{
+                background-color: rgba(102, 126, 234, 0.4);
+                color: {Colors.TEXT_PRIMARY};
+            }}
+        """)
+
+    def _create_pod_card(self, row, pod_info):
+        """创建单个 Pod 卡片"""
+        card = QFrame()
+        card.setObjectName("podCard")
+        card.setStyleSheet(f"""
+            QFrame#podCard {{
+                background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 12px;
+            }}
+        """)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 12, 16, 12)
+        card_layout.setSpacing(10)
+
+        # 头部：Pod名称 + 当前分支
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
+
+        name_label = QLabel(pod_info["name"])
+        name_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 14px;
+                font-weight: 600;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        header_layout.addWidget(name_label)
+
+        current_branch = pod_info.get("current_branch", "")
+        if current_branch:
+            branch_badge = QLabel(current_branch)
+            branch_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #a5b4fc;
+                    font-size: 11px;
+                    background-color: rgba(99, 102, 241, 0.15);
+                    border: 1px solid rgba(99, 102, 241, 0.25);
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                }}
+            """)
+            header_layout.addWidget(branch_badge)
+
+        # 已有Tag徽章
+        tags = self.get_sorted_tags(pod_info["path"])
+        if tags:
+            latest_tag_badge = QLabel(tags[0])
+            latest_tag_badge.setStyleSheet(f"""
+                QLabel {{
+                    color: #fbbf24;
+                    font-size: 11px;
+                    background-color: rgba(251, 191, 36, 0.15);
+                    border: 1px solid rgba(251, 191, 36, 0.25);
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                }}
+            """)
+            latest_tag_badge.setToolTip("最新Tag: " + "\n".join(tags[:5]))
+            header_layout.addWidget(latest_tag_badge)
+
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        # 路径
+        path_label = QLabel(pod_info["path"])
+        path_label.setStyleSheet(f"""
+            QLabel {{
+                color: {Colors.TEXT_MUTED};
+                font-size: 11px;
+                background: transparent;
+                border: none;
+            }}
+        """)
+        card_layout.addWidget(path_label)
+
+        # 选择分支
+        branch_row = QHBoxLayout()
+        branch_row.setSpacing(12)
+
+        branch_label = QLabel("基于分支:")
+        branch_label.setFixedWidth(65)
+        branch_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
         )
-        self.pod_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.pod_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.pod_table.horizontalHeader().setStretchLastSection(True)
-        self.pod_table.verticalHeader().setVisible(False)
-        self.pod_table.setAlternatingRowColors(True)
-        self.pod_table.currentCellChanged.connect(self.on_row_changed)
+        branch_row.addWidget(branch_label)
 
-        # 设置列宽
-        self.pod_table.setColumnWidth(0, 160)  # Pod名称
-        self.pod_table.setColumnWidth(1, 110)  # 当前分支
-        self.pod_table.setColumnWidth(2, 140)  # 选择分支
-        self.pod_table.setColumnWidth(3, 280)  # 已有Tag
-        self.pod_table.setColumnWidth(4, 200)  # Tag名称
+        branches = pod_info.get("branches", [])
+        branch_combo = CustomDropdown()
+        branch_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        if branches:
+            branch_combo.addItems(branches)
+            master_branches = [b for b in branches if "master" in b.lower()]
+            if master_branches:
+                if "master" in master_branches:
+                    branch_combo.setCurrentText("master")
+                elif "origin/master" in master_branches:
+                    branch_combo.setCurrentText("origin/master")
+                else:
+                    branch_combo.setCurrentText(master_branches[0])
+        else:
+            branch_combo.addItem("无分支")
 
-        table_layout.addWidget(self.pod_table)
-        table_group.setLayout(table_layout)
-        layout.addWidget(table_group)
+        branch_row.addWidget(branch_combo)
+        card_layout.addLayout(branch_row)
 
-        # Tag消息编辑区域
-        self.msg_group = QGroupBox("Tag消息")
-        msg_layout = QGridLayout()
+        # Tag名称
+        tag_row = QHBoxLayout()
+        tag_row.setSpacing(12)
 
-        # 当前编辑的Pod
-        msg_layout.addWidget(QLabel("当前编辑Pod:"), 0, 0)
-        self.current_pod_label = QLabel("")
-        self.current_pod_label.setStyleSheet(
-            "font-weight: bold; color: #007aff; font-size: 14px;"
+        tag_label = QLabel("Tag名称:")
+        tag_label.setFixedWidth(65)
+        tag_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
         )
-        msg_layout.addWidget(self.current_pod_label, 0, 1)
+        tag_row.addWidget(tag_label)
 
-        # Tag消息输入
-        msg_layout.addWidget(QLabel("Tag消息:"), 1, 0)
-        self.msg_edit = QTextEdit()
-        self.msg_edit.setPlaceholderText("输入Tag消息...")
-        self.msg_edit.setMinimumHeight(80)
-        msg_layout.addWidget(self.msg_edit, 1, 1)
-
-        # 消息模板
-        msg_layout.addWidget(QLabel("消息模板:"), 2, 0)
-        self.template_combo = QComboBox()
-        self.template_combo.addItems(
-            [
-                "-- 选择模板 --",
-                "Release {tag_name}",
-                "Hotfix修复",
-                "功能更新",
-                "版本发布",
-            ]
+        recommended_tag = self.generate_recommended_tag(tags)
+        tag_input = QLineEdit(recommended_tag)
+        tag_input.setPlaceholderText("输入Tag名称...")
+        tag_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        tag_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 6px;
+                padding: 6px 10px;
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border-color: rgba(102, 126, 234, 0.6);
+                background-color: rgba(255, 255, 255, 0.1);
+            }}
+        """)
+        tag_input.textChanged.connect(
+            lambda text, r=row: self.on_tag_changed(r, text)
         )
-        self.template_combo.currentIndexChanged.connect(self.apply_template)
-        msg_layout.addWidget(self.template_combo, 2, 1)
+        tag_row.addWidget(tag_input)
+        card_layout.addLayout(tag_row)
 
-        # 保存配置按钮
-        self.save_btn = QPushButton("保存当前Pod配置")
-        self.save_btn.setProperty("buttonType", "info")
-        self.save_btn.clicked.connect(self.save_current_config)
-        msg_layout.addWidget(self.save_btn, 3, 1, Qt.AlignRight)
+        # Tag消息
+        msg_row = QHBoxLayout()
+        msg_row.setSpacing(12)
 
-        self.msg_group.setLayout(msg_layout)
-        layout.addWidget(self.msg_group)
+        msg_label = QLabel("消息:")
+        msg_label.setFixedWidth(65)
+        msg_label.setStyleSheet(
+            f"color: {Colors.TEXT_SECONDARY}; font-size: 12px; background: transparent;"
+        )
+        msg_row.addWidget(msg_label)
 
-        # 按钮区域
-        btn_layout = QHBoxLayout()
-        cancel_btn = QPushButton("取消")
-        cancel_btn.setProperty("type", "cancel")
-        cancel_btn.clicked.connect(self.reject)
+        msg_input = QLineEdit(f"Release {recommended_tag}")
+        msg_input.setPlaceholderText("输入Tag消息...")
+        msg_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        msg_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 6px;
+                padding: 6px 10px;
+                color: {Colors.TEXT_PRIMARY};
+                font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border-color: rgba(102, 126, 234, 0.6);
+                background-color: rgba(255, 255, 255, 0.1);
+            }}
+        """)
+        msg_input.textChanged.connect(
+            lambda text, r=row: self.on_message_changed(r, text)
+        )
+        msg_row.addWidget(msg_input)
+        card_layout.addLayout(msg_row)
 
-        create_all_btn = QPushButton("批量创建所有Tag")
-        create_all_btn.setProperty("buttonType", "success")
-        create_all_btn.clicked.connect(self.create_all_tags)
+        self.pod_cards.append(
+            {
+                "card": card,
+                "branch_combo": branch_combo,
+                "tag_input": tag_input,
+                "msg_input": msg_input,
+            }
+        )
 
-        btn_layout.addWidget(create_all_btn)
-        btn_layout.addWidget(cancel_btn)
-        layout.addLayout(btn_layout)
-
-        self.setLayout(layout)
+        return card
 
     def load_pods_info(self):
-        """加载Pod信息到表格"""
-        self.pod_table.setRowCount(len(self.pods_info))
-        self.pod_configs = {}  # {row: {'tag_name': '', 'tag_message': ''}}
-
         for row, pod_info in enumerate(self.pods_info):
-            # Pod名称
-            name_item = QTableWidgetItem(pod_info["name"])
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self.pod_table.setItem(row, 0, name_item)
-
-            # 当前分支
-            branch_item = QTableWidgetItem(pod_info.get("current_branch", "获取中..."))
-            branch_item.setFlags(branch_item.flags() & ~Qt.ItemIsEditable)
-            self.pod_table.setItem(row, 1, branch_item)
-
-            # 选择分支（ComboBox）
-            branch_combo = QComboBox()
-            branch_combo.setFixedHeight(24)
-            branches = pod_info.get("branches", [])
-            if branches:
-                branch_combo.addItems(branches)
-                # 默认优先选择包含"master"的分支（如 master, origin/master, feature/master-fix 等）
-                master_branches = [b for b in branches if "master" in b.lower()]
-                if master_branches:
-                    # 优先选择精确匹配 "master" 或 "origin/master"，其次是其他包含master的分支
-                    if "master" in master_branches:
-                        branch_combo.setCurrentText("master")
-                    elif "origin/master" in master_branches:
-                        branch_combo.setCurrentText("origin/master")
-                    else:
-                        branch_combo.setCurrentText(master_branches[0])
-                elif len(branches) > 0:
-                    branch_combo.setCurrentIndex(0)
-            else:
-                branch_combo.addItem("无分支")
-            self.pod_table.setCellWidget(row, 2, branch_combo)
-
-            # 已有Tag（只读，按时间排序）
             tags = self.get_sorted_tags(pod_info["path"])
-            tags_text = ", ".join(tags[:4]) if tags else "无"
-            tags_item = QTableWidgetItem(tags_text)
-            tags_item.setFlags(tags_item.flags() & ~Qt.ItemIsEditable)
-            tags_item.setToolTip("\n".join(tags) if tags else "无Tag")
-            self.pod_table.setItem(row, 3, tags_item)
-
-            # 生成推荐Tag名称
             recommended_tag = self.generate_recommended_tag(tags)
-            tag_name_item = QTableWidgetItem(f"{recommended_tag} (推荐)")
-            tag_name_item.setFlags(tag_name_item.flags() | Qt.ItemIsEditable)
-            tag_name_item.setToolTip("建议使用语义化版本号，如 v1.0.0")
-            self.pod_table.setItem(row, 4, tag_name_item)
 
-            # 初始化配置
             self.pod_configs[row] = {
                 "tag_name": recommended_tag,
                 "tag_message": f"Release {recommended_tag}",
             }
 
-        # 设置固定行高
-        for i in range(self.pod_table.rowCount()):
-            self.pod_table.setRowHeight(i, 48)
+            card = self._create_pod_card(row, pod_info)
+            self.cards_layout.addWidget(card)
 
-        # 默认选中第一行
-        if len(self.pods_info) > 0:
-            self.pod_table.selectRow(0)
-            self.load_pod_config(0)
+        self.cards_layout.addStretch()
 
-    def on_row_changed(
-        self, current_row, current_column, previous_row, previous_column
-    ):
-        """当前行改变时保存上一行的配置并加载新行的配置"""
-        if previous_row >= 0 and previous_row < len(self.pods_info):
-            self.save_current_config()
+    def on_tag_changed(self, row, text):
+        if row in self.pod_configs:
+            self.pod_configs[row]["tag_name"] = text
+            # 自动更新消息
+            card_data = self.pod_cards[row]
+            current_msg = card_data["msg_input"].text()
+            if current_msg.startswith("Release "):
+                card_data["msg_input"].setText(f"Release {text}")
+                self.pod_configs[row]["tag_message"] = f"Release {text}"
 
-        if current_row >= 0 and current_row < len(self.pods_info):
-            self.load_pod_config(current_row)
-
-    def load_pod_config(self, row):
-        """加载指定行的配置到编辑区域"""
-        if row >= len(self.pods_info):
-            return
-
-        pod_info = self.pods_info[row]
-        self.current_row = row
-
-        # 更新Pod名称标签
-        self.current_pod_label.setText(pod_info["name"])
-
-        # 加载配置
-        config = self.pod_configs.get(row, {"tag_name": "", "tag_message": ""})
-
-        # 表格中Tag名称可能已被用户修改，优先使用表格中的值
-        tag_name_item = self.pod_table.item(row, 4)
-        if tag_name_item:
-            config["tag_name"] = self._clean_tag_name(tag_name_item.text().strip())
-            self.pod_configs[row]["tag_name"] = config["tag_name"]
-
-        # 更新Tag消息编辑框
-        self.msg_edit.setText(config.get("tag_message", ""))
-
-    def save_current_config(self):
-        """保存当前行的配置"""
-        if self.current_row < 0 or self.current_row >= len(self.pods_info):
-            return
-
-        # 保存Tag名称到表格
-        tag_name = self.pod_table.item(self.current_row, 4).text().strip()
-        tag_message = self.msg_edit.toPlainText().strip()
-
-        # 保存配置
-        self.pod_configs[self.current_row] = {
-            "tag_name": tag_name,
-            "tag_message": tag_message,
-        }
-
-    def apply_template(self, index):
-        """应用消息模板"""
-        if index == 0:
-            return
-
-        template = self.template_combo.currentText()
-        tag_name = self.pod_table.item(self.current_row, 4).text().strip()
-
-        message = template.replace("{tag_name}", tag_name)
-        self.msg_edit.setText(message)
+    def on_message_changed(self, row, text):
+        if row in self.pod_configs:
+            self.pod_configs[row]["tag_message"] = text
 
     def get_sorted_tags(self, local_path):
-        """获取按时间排序的Tag列表（最新的在前）"""
         try:
             result = subprocess.run(
                 ["git", "tag", "--sort=-creatordate"],
@@ -494,175 +435,104 @@ class BatchTagDialog(QDialog):
             return []
 
     def generate_recommended_tag(self, existing_tags):
-        """生成推荐Tag名称"""
         if not existing_tags:
             return "v1.0.0"
 
-        # 尝试解析最新tag
         latest_tag = existing_tags[0]
         version_match = re.search(r"v?(\d+)\.(\d+)\.(\d+)", latest_tag)
 
         if version_match:
             major, minor, patch = map(int, version_match.groups())
-            # 推荐补丁版本递增
             return f"v{major}.{minor}.{patch + 1}"
         else:
             return "v1.0.0"
 
-    def _clean_tag_name(self, tag_name):
-        """清理Tag名称，移除(推荐)后缀"""
-        if not tag_name:
-            return tag_name
-        return tag_name.replace(" (推荐)", "").strip()
-
     def create_all_tags(self):
-        """批量创建所有Tag"""
-        # 先保存当前行的配置
-        self.save_current_config()
+        # 验证所有Tag名称
+        for row, pod_info in enumerate(self.pods_info):
+            config = self.pod_configs.get(row, {})
+            if not config.get("tag_name", "").strip():
+                ModernDialog.warning(self, "警告", f"请为 {pod_info['name']} 输入Tag名称")
+                return
 
-        reply = QMessageBox.question(
+        reply = ModernDialog.question(
             self,
             "确认",
-            "确定要为所有Pod创建Tag吗？",
-            QMessageBox.Yes | QMessageBox.No,
+            f"确定要为 {len(self.pods_info)} 个Pod创建Tag吗？",
+            ModernDialog.Yes | ModernDialog.No,
         )
 
-        if reply != QMessageBox.Yes:
+        if reply != ModernDialog.Yes:
             return
 
-        # 收集分支选择信息
+        # 收集分支选择
         branch_selections = {}
-        for row in range(self.pod_table.rowCount()):
-            branch_combo = self.pod_table.cellWidget(row, 2)
-            selected_branch = ""
-            if branch_combo and branch_combo.currentIndex() >= 0:
-                selected_branch = branch_combo.currentText()
+        for row in range(len(self.pod_cards)):
+            branch_combo = self.pod_cards[row]["branch_combo"]
+            selected_branch = branch_combo.currentText() if branch_combo.currentIndex() >= 0 else ""
             branch_selections[row] = selected_branch
 
-        # 创建loading对话框
-        loading_dialog = QDialog(self)
-        loading_dialog.setWindowTitle("创建Tag")
-        loading_dialog.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint)
+        loading_dialog = QWidget(self)
         loading_dialog.setFixedSize(200, 100)
-        loading_dialog.setStyleSheet("""
-            QDialog {
-                background-color: #f5f5f7;
+        loading_dialog.setStyleSheet(f"""
+            QWidget {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {Colors.BG_GRADIENT_START},
+                    stop:0.5 {Colors.BG_GRADIENT_MID},
+                    stop:1 {Colors.BG_GRADIENT_END}
+                );
                 border-radius: 12px;
-            }
+            }}
         """)
-
-        loading_layout = QVBoxLayout()
-        loading_layout.setContentsMargins(20, 20, 20, 20)
-
-        # 使用LoadingWidget
         self.loading_widget = LoadingWidget("创建中...")
+        loading_layout = QVBoxLayout()
         loading_layout.addWidget(self.loading_widget)
-
         loading_dialog.setLayout(loading_layout)
         loading_dialog.show()
-
-        # 开始动画
         self.loading_widget.start_animation()
-        QApplication.processEvents()
 
-        # 创建工作线程
         self.worker = TagCreationWorker(
             self.pods_info, self.pod_configs, branch_selections
         )
         self.worker.finished.connect(
             lambda result: self._on_tag_creation_finished(result, loading_dialog)
         )
-        # 设置父对象为None，避免对话框关闭时线程被强制销毁
         self.worker.setParent(None)
-        # 线程完成后自动删除
-        self.worker.finished.connect(self.worker.deleteLater)
-
-        # 启动工作线程
         self.worker.start()
 
     def _on_tag_creation_finished(self, result, loading_dialog):
-        """处理Tag创建完成"""
-        try:
-            # 停止动画
-            if hasattr(self, "loading_widget") and self.loading_widget:
-                self.loading_widget.stop_animation()
+        if self.loading_widget:
+            self.loading_widget.stop_animation()
 
-            if loading_dialog:
-                loading_dialog.close()
+        loading_dialog.close()
 
-            success_count = result["success_count"]
-            fail_count = result["fail_count"]
-            error_messages = result["error_messages"]
+        success_count = result["success_count"]
+        fail_count = result["fail_count"]
+        error_messages = result["error_messages"]
 
-            # 刷新UI显示（Tag列表和推荐值）
-            for row in range(self.pod_table.rowCount()):
-                pod_info = self.pods_info[row]
-                local_path = pod_info["path"]
+        result_msg = f"创建完成：成功 {success_count} 个，失败 {fail_count} 个"
+        if error_messages:
+            result_msg += "\n\n失败详情:\n" + "\n".join(error_messages[:10])
 
-                try:
-                    # 刷新Tag列表
-                    new_tags = self.get_sorted_tags(local_path)
-                    tags_text = ", ".join(new_tags[:4]) if new_tags else "无"
-                    self.pod_table.item(row, 3).setText(tags_text)
-
-                    # 更新推荐Tag
-                    new_recommended = self.generate_recommended_tag(new_tags)
-                    self.pod_table.item(row, 4).setText(new_recommended + " (推荐)")
-
-                    # 更新配置
-                    self.pod_configs[row] = {
-                        "tag_name": new_recommended,
-                        "tag_message": f"Release {new_recommended}",
-                    }
-                except Exception:
-                    pass
-
-            # 显示结果
-            result_msg = f"✅ 成功: {success_count}\n❌ 失败: {fail_count}"
-            if error_messages:
-                result_msg += "\n\n错误信息:\n" + "\n".join(error_messages[:5])
-                if len(error_messages) > 5:
-                    result_msg += f"\n... 还有 {len(error_messages) - 5} 个错误"
-
-            if fail_count == 0:
-                QMessageBox.information(self, "成功", result_msg)
-                self.accept()
-            else:
-                QMessageBox.warning(self, "警告", result_msg)
-        except Exception as e:
-            if loading_dialog:
-                loading_dialog.close()
-            QMessageBox.critical(self, "错误", f"处理Tag创建结果时出错: {str(e)}")
+        if fail_count == 0:
+            ModernDialog.information(self, "成功", result_msg)
+            self.accept()
+        else:
+            ModernDialog.warning(self, "警告", result_msg)
 
     def closeEvent(self, event):
-        """处理对话框关闭事件，确保线程安全退出"""
-        if hasattr(self, "worker") and self.worker:
-            try:
-                if self.worker.isRunning():
-                    self.worker.quit()
-                    self.worker.wait(2000)  # 等待最多2秒
-            except RuntimeError:
-                # 线程对象可能已被删除
-                pass
+        if self.worker and self.worker.isRunning():
+            reply = ModernDialog.question(
+                self,
+                "确认",
+                "Tag创建正在进行中，确定要取消吗？",
+                ModernDialog.Yes | ModernDialog.No,
+                ModernDialog.No,
+            )
+            if reply == ModernDialog.No:
+                event.ignore()
+                return
+            self.worker.quit()
+            self.worker.wait(2000)
         event.accept()
-
-    def reject(self):
-        """处理取消/关闭操作，确保线程安全退出"""
-        if hasattr(self, "worker") and self.worker:
-            try:
-                if self.worker.isRunning():
-                    reply = QMessageBox.question(
-                        self,
-                        "确认",
-                        "Tag创建正在进行中，确定要取消吗？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
-                    )
-                    if reply == QMessageBox.No:
-                        return
-                    self.worker.quit()
-                    self.worker.wait(2000)
-            except RuntimeError:
-                # 线程对象可能已被删除
-                pass
-        super().reject()
